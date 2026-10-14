@@ -1,2 +1,4 @@
 node_modules/
 tests/.env.test
+.dev.vars
+.wrangler/
