@@ -1,0 +1,13 @@
+{
+  "name": "commerce-template-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run.mjs",
+    "test:live": "node live.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.2.17",
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}

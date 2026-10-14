@@ -1,0 +1,6 @@
+{
+  // Worker chỉ phục vụ file tĩnh (CMS) ở giai đoạn này. Worker render trang công khai sẽ thêm "main" ở Bước 4.
+  "name": "webcty-ev",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public" }
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Quản trị</title>
+<link rel="stylesheet" href="cms.css">
+</head>
+<body>
+<div id="boot" class="center-msg">Đang tải…</div>
+
+<section id="login" hidden>
+  <form id="login-form" class="card login-card" autocomplete="on">
+    <h1 id="login-title">Đăng nhập quản trị</h1>
+    <label>Email <input type="email" name="email" autocomplete="username" required></label>
+    <label>Mật khẩu <input type="password" name="password" autocomplete="current-password" required></label>
+    <p id="login-error" class="error" role="alert" hidden></p>
+    <button class="btn primary" type="submit">Đăng nhập</button>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <button id="nav-toggle" class="btn ghost" aria-label="Mở menu">☰</button>
+    <strong id="site-name">Quản trị</strong>
+    <span class="grow"></span>
+    <span id="who" class="muted"></span>
+    <button id="logout" class="btn ghost">Đăng xuất</button>
+  </header>
+  <nav id="nav" class="sidebar"></nav>
+  <main id="view" class="content" tabindex="-1"></main>
+</div>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="modal"></dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="cms.js"></script>
+</body>
+</html>
