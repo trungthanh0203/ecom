@@ -18,6 +18,10 @@ Trang chủ, danh sách/danh mục/thương hiệu, chi tiết sản phẩm, gi�
 - Cloudflare Dashboard → Worker → Settings → Variables and Secrets: thêm secret `SUPABASE_SERVICE_ROLE_KEY` (bắt buộc cho giỏ hàng/đặt hàng/báo giá/liên hệ), `TURNSTILE_SECRET` (tuỳ chọn). Đặt `TURNSTILE_SITEKEY` + `REQUIRE_TURNSTILE=true` trong `wrangler.jsonc` trước khi mở công khai.
 - Chạy `db/seed_settings.sql` (đã sửa giá trị) để có thông tin công ty, bật COD, phí ship.
 
+## CMS vận hành (`public/quan-tri/ops.js`) — cần chạy thêm `db/migrations/005_staff_directory.sql`
+Đơn hàng (lọc/tìm, chi tiết, đổi trạng thái đơn/thanh toán/vận chuyển theo đúng bảng chuyển, phân công, ghi chú, lịch sử, in phiếu, xuất CSV), Báo giá B2B (lọc/tìm, chi tiết, trạng thái, phân công, ghi chú, ghi nhận đã liên hệ, xuất CSV), Liên hệ, Cài đặt (thông tin công ty, VAT, COD/chuyển khoản, phí vận chuyển).
+Kiểm tra giao diện mới chỉ bằng client Supabase GIẢ (bắt lỗi JS khi vẽ) — chưa thử thao tác ghi thật.
+
 ## Chưa làm / giới hạn đã biết
 - Trang công khai CHƯA kiểm thử với sản phẩm thật (DB chưa có sản phẩm) và API ghi (checkout/báo giá/liên hệ) CHƯA kiểm thử đầu-cuối trên Supabase thật.
 - Chưa có: trang nội dung (giới thiệu, tin tức, dịch vụ, chính sách), lọc theo thuộc tính kỹ thuật, sắp xếp theo tên, GA4/GTM, email thông báo, cache trang.

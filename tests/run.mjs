@@ -28,7 +28,7 @@ async function as(role, uid, fn) {
 
 // ---------- setup ----------
 await db.exec(read('auth_stub.sql'));
-for (const f of ['001_core.sql', '002_security.sql', '003_commerce.sql']) await db.exec(read(`../db/migrations/${f}`));
+for (const f of ['001_core.sql', '002_security.sql', '003_commerce.sql', '005_staff_directory.sql']) await db.exec(read(`../db/migrations/${f}`));
 await db.exec(read('../db/seed_core.sql'));
 await db.exec(read('../db/seed_xe_dien.sql'));
 
@@ -333,6 +333,17 @@ await test('seed xe điện: 7 danh mục, VI published, EN là dịch máy ở 
   eq((await q("select count(*)::int c from category_translations where lang='en' and status='draft' and machine_translated")).at(0).c, 7);
   const en = await as('anon', null, () => q("select * from category_translations where lang='en'"));
   eq(en.length, 0);
+});
+
+console.log('\n[8] Danh bạ nhân viên');
+await test('staff_directory: staff hoạt động đọc được (chỉ id/tên/vai trò); anon và người ngoài bị chặn', async () => {
+  const rows = await as('authenticated', U.sales, () => q('select * from staff_directory()'));
+  const nAct = (await q('select count(*)::int c from staff where active'))[0].c; eq(rows.length, nAct); eq(Object.keys(rows[0]).sort(), ['display_name', 'role', 'user_id']);
+  await throws(() => as('anon', null, () => q('select * from staff_directory()')), /permission denied/);
+  eq((await as('authenticated', U.nobody, () => q('select * from staff_directory()'))).length, 0);
+  await q('update staff set active=false where user_id=$1', [U.con]);
+  eq((await as('authenticated', U.sales, () => q('select * from staff_directory()'))).length, nAct - 1, 'staff vô hiệu hoá không hiện');
+  await q('update staff set active=true where user_id=$1', [U.con]);
 });
 
 console.log(`\n==== ${pass} đạt, ${fail} lỗi ====`);

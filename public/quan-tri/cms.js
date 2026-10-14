@@ -20,6 +20,8 @@ const MSG = [
   [/row-level security|permission denied/, "Bạn không có quyền thực hiện thao tác này."],
   [/foreign key/, "Dữ liệu đang được sử dụng ở nơi khác nên không thể xoá."],
   [/attribute_defs_category_id_code_key/, "Mã thuộc tính đã tồn tại trong danh mục này."],
+  [/shipping_rules_province_uq/, "Đã có quy tắc vận chuyển cho tỉnh/thành này."],
+  [/INVALID_(ORDER|PAYMENT|SHIPPING|QUOTE)_TRANSITION/, "Không thể chuyển sang trạng thái này từ trạng thái hiện tại."],
   [/Failed to fetch|NetworkError/, "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại."]
 ];
 const errMsg = (e) => {
@@ -121,8 +123,14 @@ const ROUTES = [
   ["dashboard", "Tổng quan", null], ["products", "Sản phẩm", null], ["categories", "Danh mục", null],
   ["brands", "Thương hiệu", null], ["attributes", "Thuộc tính kỹ thuật", null]
 ];
+const EXT = {};   // module đăng ký thêm (ops.js): {key,title,perm,view,after}
+window.CMS = { $, $$, esc, vnd, toast, busy, errMsg, openModal, closeModal, inp, txa, sel, chk, g, numOrNull, S, can, db: () => sb, reload: () => route(), register: (d) => { EXT[d.key] = d; } };
 function buildNav() {
-  $("#nav").innerHTML = ROUTES.map(([k, t]) => `<a href="#/${k}" data-k="${k}">${esc(t)}</a>`).join("");
+  const ext = Object.values(EXT).filter((d) => !d.perm || can(d.perm));
+  const a = (k, t) => `<a href="#/${k}" data-k="${k}">${esc(t)}</a>`;
+  const ops = ext.filter((d) => !d.after).map((d) => a(d.key, d.title)).join(""), tail = ext.filter((d) => d.after).map((d) => a(d.key, d.title)).join("");
+  $("#nav").innerHTML = a("dashboard", "Tổng quan") + (ops ? `<div class="sep">Vận hành</div>${ops}` : "") + '<div class="sep">Catalogue</div>'
+    + ROUTES.filter(([k]) => k !== "dashboard").map(([k, t]) => a(k, t)).join("") + (tail ? `<div class="sep">Hệ thống</div>${tail}` : "");
 }
 let routeTok = 0;
 async function route() {
@@ -132,7 +140,7 @@ async function route() {
   const tok = ++routeTok, v = $("#view");
   v.innerHTML = '<p class="muted">Đang tải…</p>';
   try {
-    const fn = { dashboard: viewDashboard, products: arg ? viewProductEdit : viewProducts, categories: viewCategories, brands: viewBrands, attributes: viewAttributes }[k];
+    const fn = EXT[k] && (!EXT[k].perm || can(EXT[k].perm)) ? EXT[k].view : { dashboard: viewDashboard, products: arg ? viewProductEdit : viewProducts, categories: viewCategories, brands: viewBrands, attributes: viewAttributes }[k];
     if (!fn) { v.innerHTML = "<h1>Không tìm thấy trang</h1>"; return; }
     const html = await fn(arg, tok);
     if (tok === routeTok && typeof html === "string") v.innerHTML = html;

@@ -52,6 +52,14 @@ for (const [r, c] of Object.entries(C)) await test(`${r}: đọc được hồ s
   truthy(must(await c.from('role_permissions').select('perm').eq('role', st.role)).length > 0);
 });
 
+for (const [r, c] of Object.entries(C)) await test(`${r}: staff_directory trả danh bạ (chỉ id/tên/vai trò)`, async () => {
+  const d = must(await c.rpc('staff_directory')); truthy(d.length >= 1); eq(Object.keys(d[0]).sort(), ['display_name', 'role', 'user_id']);
+});
+if (C.ORDER || C.SALES) await test('đọc danh sách đơn hàng/báo giá thật + quyền chuyển trạng thái (chỉ thử chuyển sai để bị chặn, không sửa dữ liệu)', async () => {
+  const c = C.ORDER || C.SALES; const o = must(await c.from('orders').select('id,status').order('created_at', { ascending: false }).limit(1));
+  if (o.length) { const r = await c.from('orders').update({ status: 'completed' }).eq('id', o[0].id).select('id'); if (o[0].status === 'new') truthy(r.error || r.data.length === 0, 'nhảy cóc new→completed phải bị chặn'); }
+  must(await c.from('quote_requests').select('id,status').limit(1));
+});
 const ed = C.EDITOR || C.ADMIN || C.SA, edName = C.EDITOR ? 'EDITOR' : C.ADMIN ? 'ADMIN' : 'SA';
 let pid;
 if (ed) {

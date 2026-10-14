@@ -54,3 +54,6 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:20;max-width:92vw}
 #toast.err{background:var(--danger);color:#fff}
 .pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px}
+
+.lines{padding-left:18px}.lines li{margin-bottom:8px}
+@media print{.topbar,.sidebar,.noprint,.btn,#toast{display:none!important}.content{margin:0;padding:0;max-width:none}body{background:#fff;color:#000}.card,.table-wrap{border-color:#999}}
