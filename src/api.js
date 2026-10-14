@@ -1,4 +1,4 @@
-import { rpc, DbError, getRefs } from "./db.js";
+import { rpc, rest, DbError, getRefs } from "./db.js";
 import { jsonRes, truthy } from "./util.js";
 import { suggest } from "./catalog.js";
 
@@ -24,6 +24,26 @@ async function verifyTurnstile(env, token, ip) {
 }
 const fail = (error, status, extra = {}) => jsonRes({ error, ...extra }, status);
 
+// Mã lý do an toàn (không lộ secret) để chẩn đoán lỗi cấu hình mà không phải đoán.
+function reasonOf(e) {
+  if (!(e instanceof DbError)) return "WORKER";
+  const m = String(e.body?.message || "");
+  if (m === "MISSING_SERVICE_ROLE_KEY") return "NO_SERVICE_KEY";
+  if (m === "MISSING_ANON_KEY") return "NO_ANON_KEY";
+  if (e.status === 401 || e.status === 403 || /invalid api key|jwt/i.test(m)) return "DB_AUTH";
+  if (e.body?.code === "42501") return "DB_PERMISSION";
+  if (e.body?.code === "PGRST202" || e.status === 404) return "DB_NO_FUNCTION";
+  return "DB_" + (e.status || 0);
+}
+
+async function health(env) {
+  const out = { service_key: !!env.SUPABASE_SERVICE_ROLE_KEY, anon_key: !!env.SUPABASE_ANON_KEY, turnstile_secret: !!env.TURNSTILE_SECRET, db_read: null, rpc: null };
+  try { await rest(env, "site_settings?select=key&limit=1"); out.db_read = "ok"; } catch (e) { out.db_read = reasonOf(e); }
+  try { await rpc(env, "cart_quote", { p_items: [], p_lang: "vi", p_province: null }); out.rpc = "unexpected"; }
+  catch (e) { out.rpc = e instanceof DbError && e.body?.code === "P0001" && e.body.message === "EMPTY_CART" ? "ok" : reasonOf(e); }
+  return out;
+}
+
 export async function handleApi(request, env, url) {
   const path = url.pathname.replace(/\/$/, ""), ip = request.headers.get("cf-connecting-ip") || "unknown";
   if (request.method === "GET" && path === "/api/suggest") {
@@ -31,6 +51,10 @@ export async function handleApi(request, env, url) {
     const lang = url.searchParams.get("lang") === "en" ? "en" : "vi", q = url.searchParams.get("q") || "";
     if (q.trim().length < 2) return jsonRes([], 200, { "cache-control": "public, max-age=60" });
     return jsonRes(await suggest(env, lang, q), 200, { "cache-control": "public, max-age=60" });
+  }
+  if (request.method === "GET" && path === "/api/health") {
+    if (limited(ip, path, 10, 60000)) return fail("RATE", 429);
+    return jsonRes(await health(env));
   }
   if (request.method !== "POST" || !LIMITS[path]) return fail("NOT_FOUND", 404);
   const origin = request.headers.get("origin");
@@ -86,8 +110,9 @@ export async function handleApi(request, env, url) {
       let detail; try { detail = e.body.details ? JSON.parse(e.body.details) : undefined; } catch { /* không phải JSON */ }
       return fail(String(e.body.message).split(" ")[0], 422, detail ? { detail } : {});
     }
-    console.error("api error", path, e?.message, e?.body?.code);
-    return fail("GENERIC", 500);
+    const reason = reasonOf(e);
+    console.error("api error", path, reason, e?.message, e?.body?.code);
+    return fail("GENERIC", 500, { reason });
   }
   return fail("NOT_FOUND", 404);
 }

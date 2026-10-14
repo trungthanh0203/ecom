@@ -1,9 +1,11 @@
 {
   // Worker render trang công khai + API. File tĩnh (/assets, /quan-tri) do Assets phục vụ trước.
-  "name": "webcty-ev",
+  "name": "ecom",
   "main": "worker.js",
   "compatibility_date": "2026-10-01",
   "assets": { "directory": "./public" },
+  // Giữ lại biến/secret đặt tay trên Dashboard khi deploy (tránh bị xoá mất mỗi lần push).
+  "keep_vars": true,
   "vars": {
     "SUPABASE_URL": "https://lpborkzocepeaikogwfw.supabase.co",
     "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwYm9ya3pvY2VwZWFpa29nd2Z3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5ODc1MDQsImV4cCI6MjEwNzU2MzUwNH0.LJ8TifYEWFYpQLFELhJ_-EdyP23VsyMK0j5qeLN_2Jk",

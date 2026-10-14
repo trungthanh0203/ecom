@@ -35,7 +35,7 @@ async function post(url, body) {
     return { status: r.status, data: await r.json().catch(() => ({})) };
   } catch { return { status: 0, data: {} }; }
 }
-const errMsg = (r) => (r.status === 429 ? T.err_RATE : T["err_" + r.data?.error] || T.err_GENERIC);
+const errMsg = (r) => (r.status === 429 ? T.err_RATE : T["err_" + r.data?.error] || T.err_GENERIC + (r.status === 0 ? " (NETWORK)" : r.data?.reason ? ` (${r.data.reason})` : ""));
 
 function summary(q, withShip) {
   return `<dl class="sum"><div><dt>${esc(T.subtotal)}</dt><dd>${fmt(q.subtotal)}</dd></div><div><dt>${esc(T.vat)} (${Number(q.vat_rate)}%)</dt><dd>${fmt(q.vat_amount)}</dd></div>
