@@ -20,6 +20,7 @@ const MSG = [
   [/row-level security|permission denied/, "Bạn không có quyền thực hiện thao tác này."],
   [/foreign key/, "Dữ liệu đang được sử dụng ở nơi khác nên không thể xoá."],
   [/attribute_defs_category_id_code_key/, "Mã thuộc tính đã tồn tại trong danh mục này."],
+  [/RESERVED_SLUG/, "Slug này trùng đường dẫn hệ thống (vd: san-pham, lien-he, tin-tuc…). Hãy chọn slug khác."],
   [/shipping_rules_province_uq/, "Đã có quy tắc vận chuyển cho tỉnh/thành này."],
   [/INVALID_(ORDER|PAYMENT|SHIPPING|QUOTE)_TRANSITION/, "Không thể chuyển sang trạng thái này từ trạng thái hiện tại."],
   [/Failed to fetch|NetworkError/, "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại."]
@@ -124,13 +125,13 @@ const ROUTES = [
   ["brands", "Thương hiệu", null], ["attributes", "Thuộc tính kỹ thuật", null]
 ];
 const EXT = {};   // module đăng ký thêm (ops.js): {key,title,perm,view,after}
-window.CMS = { $, $$, esc, vnd, toast, busy, errMsg, openModal, closeModal, inp, txa, sel, chk, g, numOrNull, S, can, db: () => sb, reload: () => route(), register: (d) => { EXT[d.key] = d; } };
+window.CMS = { $, $$, esc, vnd, toast, busy, errMsg, openModal, closeModal, inp, txa, sel, chk, g, numOrNull, S, can, db: () => sb, reload: () => route(), register: (d) => { EXT[d.key] = d; }, resizeImage, pubUrl, slugify, SLUG_RE, ST, tabs };
 function buildNav() {
   const ext = Object.values(EXT).filter((d) => !d.perm || can(d.perm));
   const a = (k, t) => `<a href="#/${k}" data-k="${k}">${esc(t)}</a>`;
-  const ops = ext.filter((d) => !d.after).map((d) => a(d.key, d.title)).join(""), tail = ext.filter((d) => d.after).map((d) => a(d.key, d.title)).join("");
-  $("#nav").innerHTML = a("dashboard", "Tổng quan") + (ops ? `<div class="sep">Vận hành</div>${ops}` : "") + '<div class="sep">Catalogue</div>'
-    + ROUTES.filter(([k]) => k !== "dashboard").map(([k, t]) => a(k, t)).join("") + (tail ? `<div class="sep">Hệ thống</div>${tail}` : "");
+  const grp = (g, title) => { const l = ext.filter((d) => (d.group || (d.after ? "system" : "ops")) === g).map((d) => a(d.key, d.title)).join(""); return l ? `<div class="sep">${title}</div>${l}` : ""; };
+  $("#nav").innerHTML = a("dashboard", "Tổng quan") + grp("ops", "Vận hành") + grp("content", "Nội dung") + '<div class="sep">Catalogue</div>'
+    + ROUTES.filter(([k]) => k !== "dashboard").map(([k, t]) => a(k, t)).join("") + grp("system", "Hệ thống");
 }
 let routeTok = 0;
 async function route() {

@@ -1,7 +1,8 @@
 import { esc, vnd, jsonLd, priceInfo, imgUrl, mainImage, truthy } from "./util.js";
-import { u, productUrl, PATHS } from "./i18n.js";
+import { u, productUrl, PATHS, contentUrl, listUrl } from "./i18n.js";
+import { sanitize } from "./sanitize.js";
 import { renderPage, productCard, breadcrumbs, breadcrumbLd, siteName } from "./layout.js";
-import { listProducts, getProduct } from "./catalog.js";
+import { listProducts, getProduct, listContent, getContent } from "./catalog.js";
 import { descendants } from "./db.js";
 
 const PER = 24;
@@ -22,7 +23,7 @@ export function notFound(ctx) {
 
 export async function home(ctx) {
   const { env, lang, T, refs, siteUrl } = ctx, s = refs.settings, name = siteName(ctx);
-  const [feat, neu] = await Promise.all([listProducts(env, lang, { featured: true, limit: 8 }), listProducts(env, lang, { isNew: true, limit: 8 })]);
+  const [feat, neu, news] = await Promise.all([listProducts(env, lang, { featured: true, limit: 8 }), listProducts(env, lang, { isNew: true, limit: 8 }), refs.contentNav.hasPosts[lang] ? listContent(env, lang, "post", { limit: 3 }) : { items: [] }]);
   const cats = catAvail(ctx).filter((c) => !c.parent_id), brands = refs.brands.filter((b) => b.tr[lang]);
   const section = (h, items) => items.length ? `<section><h2>${esc(h)}</h2><div class="grid">${items.map((p) => productCard(ctx, p)).join("")}</div></section>` : "";
   const org = { "@context": "https://schema.org", "@type": "Organization", name, url: siteUrl + "/" + lang + "/", ...(s.hotline ? { telephone: s.hotline } : {}), ...(s.contact_email ? { email: s.contact_email } : {}), ...(s.address ? { address: s.address } : {}) };
@@ -30,6 +31,7 @@ export async function home(ctx) {
     body: `<section class="hero"><h1>${esc(name)}</h1><p>${esc(T.hero_sub)}</p><p><a class="btn buy" href="${u(lang, "products")}">${esc(T.hero_cta)}</a> <a class="btn quote" href="${u(lang, "quote")}">${esc(T.hero_cta2)}</a></p></section>
 ${cats.length ? `<section><h2>${esc(T.h_cats)}</h2><ul class="tiles">${cats.map((c) => `<li><a class="card tile" href="${esc(catHref(lang, c))}">${c.image_path ? `<img src="${esc(imgUrl(env, c.image_path))}" alt="" loading="lazy">` : ""}<span>${esc(c.tr[lang].name)}</span></a></li>`).join("")}</ul></section>` : ""}
 ${section(T.h_featured, feat.items)}${section(T.h_new, neu.items)}
+${news.items.length ? `<section><h2>${esc(T.h_latest_news)}</h2><div class="grid">${news.items.map((r) => contentCard(ctx, "post", r)).join("")}</div></section>` : ""}
 ${brands.length ? `<section><h2>${esc(T.h_brands)}</h2><ul class="brands">${brands.map((b) => `<li><a href="${esc(brandHref(lang, b))}">${b.logo_path ? `<img src="${esc(imgUrl(env, b.logo_path))}" alt="${esc(b.tr[lang].name)}" loading="lazy" height="40">` : esc(b.tr[lang].name)}</a></li>`).join("")}</ul></section>` : ""}
 <section class="b2b card"><h2>${esc(T.b2b_title)}</h2><p>${esc(T.b2b_text)}</p><p><a class="btn quote" href="${u(lang, "quote")}">${esc(T.b2b_cta)}</a></p></section>` });
 }
@@ -150,4 +152,44 @@ export function contactPage(ctx) {
     body: `<h1>${esc(T.ct_title)}</h1><div class="two"><div>${info}</div><form id="contact-form" novalidate>
 ${field(T.ct_name, '<input name="name" autocomplete="name" required maxlength="120">')}${field(T.ct_phone, '<input name="phone" type="tel" autocomplete="tel" maxlength="20">')}${field(T.ct_email, '<input name="email" type="email" autocomplete="email" maxlength="200">')}${field(T.ct_msg, '<textarea name="message" rows="5" required maxlength="3000"></textarea>')}
 <label class="chk"><input type="checkbox" name="consent" required> ${esc(T.q_consent)}</label>${hp}${ts(ctx)}<p id="form-msg" class="error" role="alert" hidden></p><button class="btn" type="submit">${esc(T.ct_submit)}</button></form></div>` });
+}
+
+// ================= NỘI DUNG: trang / tin tức / dịch vụ / chính sách =================
+const KIND_TITLE = { post: "news_title", service: "services_title", policy: "policies_title" };
+const fmtDate = (iso, lang) => new Date(iso).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-GB");
+function contentCard(ctx, kind, r) {
+  const { env, lang, T } = ctx, it = r.content_items, href = contentUrl(lang, kind, r.slug);
+  return `<article class="card post">${it.cover_path ? `<a class="thumb" href="${esc(href)}"><img src="${esc(imgUrl(env, it.cover_path))}" alt="" loading="lazy" decoding="async"></a>` : ""}
+    <h3><a href="${esc(href)}">${esc(r.title)}</a></h3>${kind === "post" ? `<p class="muted">${esc(fmtDate(it.publish_at || it.created_at, lang))}</p>` : ""}${r.excerpt ? `<p>${esc(r.excerpt)}</p>` : ""}
+    <a class="btn" href="${esc(href)}">${esc(T.read_more)}</a></article>`;
+}
+export async function contentList(ctx, kind, { catSlug } = {}) {
+  const { env, lang, T, refs, url } = ctx, page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+  const cat = catSlug ? refs.postCats.find((c) => c.tr[lang]?.slug === catSlug) : null;
+  if (catSlug && !cat) return null;
+  const { items, total } = await listContent(env, lang, kind, { catId: cat?.id, page, limit: 12 });
+  const base = cat ? u(lang, "news", PATHS[lang].postCat, cat.tr[lang].slug) : listUrl(lang, kind), title = cat?.tr[lang].name || T[KIND_TITLE[kind]];
+  const pages = Math.max(1, Math.ceil(total / 12)), has = (l) => (kind === "post" ? refs.contentNav.hasPosts[l] : (kind === "service" ? refs.contentNav.services : refs.contentNav.policies).some((x) => x.lang === l));
+  const alts = {};
+  for (const l of ["vi", "en"]) { if (cat) { if (cat.tr[l]) alts[l] = u(l, "news", PATHS[l].postCat, cat.tr[l].slug); } else if (has(l)) alts[l] = listUrl(l, kind); }
+  const crumbs = [{ name: T.home, href: `/${lang}/` }, ...(cat ? [{ name: T.news_title, href: listUrl(lang, kind) }] : []), { name: title, href: base }];
+  const topics = kind === "post" ? refs.postCats.filter((c) => c.tr[lang]) : [];
+  const pager = pages > 1 ? `<nav class="pager" aria-label="pages">${page > 1 ? `<a class="btn" href="${esc(base + (page > 2 ? "?page=" + (page - 1) : ""))}">${esc(T.prev)}</a>` : ""}<span>${esc(T.page)} ${page}/${pages}</span>${page < pages ? `<a class="btn" href="${esc(base + "?page=" + (page + 1))}">${esc(T.next)}</a>` : ""}</nav>` : "";
+  return renderPage(ctx, { title, path: base, canonical: base + (page > 1 ? `?page=${page}` : ""), alternates: alts, noindex: !items.length, jsonld: [breadcrumbLd(ctx, crumbs)],
+    body: `${breadcrumbs(crumbs)}<h1>${esc(title)}</h1>
+${topics.length ? `<ul class="topics"><li><a href="${esc(listUrl(lang, kind))}"${cat ? "" : ' aria-current="true"'}>${esc(T.all_topics)}</a></li>${topics.map((c) => `<li><a href="${esc(u(lang, "news", PATHS[lang].postCat, c.tr[lang].slug))}"${cat?.id === c.id ? ' aria-current="true"' : ""}>${esc(c.tr[lang].name)}</a></li>`).join("")}</ul>` : ""}
+${items.length ? `<div class="grid">${items.map((r) => contentCard(ctx, kind, r)).join("")}</div>${pager}` : `<p>${esc(T.empty_content)}</p>`}` });
+}
+export async function contentDetail(ctx, kind, slug) {
+  const { env, lang, T, siteUrl } = ctx, d = await getContent(env, lang, kind, slug);
+  if (!d) return null;
+  const { t, item, alts } = d, path = contentUrl(lang, kind, slug), when = item.publish_at || item.created_at;
+  const body = await sanitize(t.body, { origin: env.SUPABASE_URL }), cover = item.cover_path ? imgUrl(env, item.cover_path) : null;
+  const crumbs = [{ name: T.home, href: `/${lang}/` }, ...(kind !== "page" ? [{ name: T[KIND_TITLE[kind]], href: listUrl(lang, kind) }] : []), { name: t.title, href: path }];
+  const ld = kind === "post" ? [jsonLd({ "@context": "https://schema.org", "@type": "Article", headline: t.title, inLanguage: lang, datePublished: when, mainEntityOfPage: siteUrl + path, ...(cover ? { image: [cover] } : {}), ...(item.author_name ? { author: { "@type": "Person", name: item.author_name } } : {}), ...(t.excerpt ? { description: t.excerpt } : {}) })] : [];
+  return renderPage(ctx, { title: t.seo_title || t.title, desc: t.seo_description || t.excerpt || undefined, path, ogType: kind === "post" ? "article" : "website", ogImage: cover || undefined,
+    alternates: Object.fromEntries(Object.entries(alts).map(([l, sl]) => [l, contentUrl(l, kind, sl)])), jsonld: [...ld, breadcrumbLd(ctx, crumbs)],
+    body: `${breadcrumbs(crumbs)}<article class="article"><h1>${esc(t.title)}</h1>${kind === "post" ? `<p class="muted">${esc(T.posted_on)} ${esc(fmtDate(when, lang))}${item.author_name ? ` · ${esc(T.by)} ${esc(item.author_name)}` : ""}</p>` : ""}
+${cover ? `<img class="cover" src="${esc(cover)}" alt="" fetchpriority="high">` : ""}<div class="rich">${body}</div>
+${kind === "service" ? `<p class="cta"><a class="btn buy" href="${u(lang, "contact")}">${esc(T.cta_contact)}</a> <a class="btn quote" href="${u(lang, "quote")}">${esc(T.b2b_cta)}</a></p>` : ""}</article>` });
 }

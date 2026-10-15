@@ -57,3 +57,11 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 .lines{padding-left:18px}.lines li{margin-bottom:8px}
 @media print{.topbar,.sidebar,.noprint,.btn,#toast{display:none!important}.content{margin:0;padding:0;max-width:none}body{background:#fff;color:#000}.card,.table-wrap{border-color:#999}}
+.lbl{display:block;font-size:.88rem;color:var(--muted);margin-bottom:4px}
+.rte{border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.rte-bar{display:flex;flex-wrap:wrap;gap:4px;padding:6px;border-bottom:1px solid var(--line);background:var(--card);border-radius:8px 8px 0 0}
+.rte-bar .btn{min-height:34px;padding:4px 10px}.rte-bar .btn.on{background:var(--primary);color:var(--primary-t)}
+.rte-body{min-height:260px;max-height:70vh;overflow:auto;padding:12px;line-height:1.65;outline:none}.rte-body:focus{box-shadow:inset 0 0 0 2px var(--primary)}
+.rte-body img{max-width:100%;height:auto}.rte-body h2{font-size:1.4rem}.rte-body h3{font-size:1.15rem}
+.rte-body table{border-collapse:collapse}.rte-body th,.rte-body td{border:1px solid var(--line);padding:6px}.rte-body blockquote{border-left:4px solid var(--line);margin:1em 0;padding:.2em 1em;color:var(--muted)}
+.rte-src{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:.85rem;border:0;border-radius:0 0 8px 8px;min-height:260px}

@@ -41,6 +41,13 @@ async function route(request, env) {
   else if (n === 1 && segs[0] === p.quote) res = await P.quotePage(ctx);
   else if (n === 2 && segs[0] === p.quote && segs[1] === p.quoteDone) res = P.quoteDonePage(ctx);
   else if (n === 1 && segs[0] === p.contact) res = P.contactPage(ctx);
+  else if (segs[0] === p.news) {
+    if (n === 1) res = await P.contentList(ctx, "post");
+    else if (n === 2) res = await P.contentDetail(ctx, "post", segs[1]);
+    else if (n === 3 && segs[1] === p.postCat) res = await P.contentList(ctx, "post", { catSlug: segs[2] });
+  } else if (segs[0] === p.services) { res = n === 1 ? await P.contentList(ctx, "service") : n === 2 ? await P.contentDetail(ctx, "service", segs[1]) : null; }
+  else if (segs[0] === p.policies) { res = n === 1 ? await P.contentList(ctx, "policy") : n === 2 ? await P.contentDetail(ctx, "policy", segs[1]) : null; }
+  else if (n === 1) res = await P.contentDetail(ctx, "page", segs[0]);
   return res || redirectOr404(ctx, path);
 }
 

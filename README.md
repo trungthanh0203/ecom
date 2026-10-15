@@ -22,6 +22,13 @@ Trang chủ, danh sách/danh mục/thương hiệu, chi tiết sản phẩm, gi�
 Đơn hàng (lọc/tìm, chi tiết, đổi trạng thái đơn/thanh toán/vận chuyển theo đúng bảng chuyển, phân công, ghi chú, lịch sử, in phiếu, xuất CSV), Báo giá B2B (lọc/tìm, chi tiết, trạng thái, phân công, ghi chú, ghi nhận đã liên hệ, xuất CSV), Liên hệ, Cài đặt (thông tin công ty, VAT, COD/chuyển khoản, phí vận chuyển).
 Kiểm tra giao diện mới chỉ bằng client Supabase GIẢ (bắt lỗi JS khi vẽ) — chưa thử thao tác ghi thật.
 
+## Nội dung: trang / tin tức / dịch vụ / chính sách (cần chạy thêm `db/migrations/006_content_guard.sql`)
+- Công khai: `/vi/{slug}/` (trang, vd /vi/gioi-thieu/), `/vi/tin-tuc/` (+ chuyên mục `/chuyen-muc/{slug}/`), `/vi/dich-vu/`, `/vi/chinh-sach/` và tương ứng `/en/…`. Menu/chân trang tự hiện khi có nội dung; trang chủ hiện 3 tin mới; sitemap + hreflang + JSON-LD Article.
+- CMS: nhóm "Nội dung" — soạn bằng trình soạn thảo trực quan tự làm, ảnh đại diện, hẹn giờ, SEO riêng từng ngôn ngữ, trạng thái bản dịch (dịch máy không tự xuất bản), chuyên mục tin.
+- An toàn: HTML được lọc theo allowlist ở 3 lớp (khi nạp vào trình soạn thảo, khi dán/lưu, và `src/sanitize.js` khi hiển thị công khai). Slug trang không được trùng đường dẫn hệ thống (trigger trong DB; thêm đường dẫn hệ thống mới => sửa `_reserved_slugs()` trong 006).
+- Chưa làm: FAQ, đối tác, chứng nhận, dự án, tuyển dụng (DB đã có loại nội dung, chưa có trang công khai/CMS); quản lý menu & khối trang chủ.
+- Kiểm thử: `npm test` (DB, gồm nội dung); bộ lọc HTML: `npx wrangler@4 dev -c tests/wrangler.test.jsonc` rồi POST HTML vào http://127.0.0.1:8787/; `tests/mock-postgrest.mjs` là máy chủ GIẢ chỉ để thử đường vẽ trang khi DB chưa có dữ liệu.
+
 ## Chưa làm / giới hạn đã biết
 - Trang công khai CHƯA kiểm thử với sản phẩm thật (DB chưa có sản phẩm) và API ghi (checkout/báo giá/liên hệ) CHƯA kiểm thử đầu-cuối trên Supabase thật.
 - Chưa có: trang nội dung (giới thiệu, tin tức, dịch vụ, chính sách), lọc theo thuộc tính kỹ thuật, sắp xếp theo tên, GA4/GTM, email thông báo, cache trang.

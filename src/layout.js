@@ -1,5 +1,5 @@
 import { esc, vnd, jsonLd, priceInfo, imgUrl, mainImage, html, truthy } from "./util.js";
-import { u, productUrl, PATHS } from "./i18n.js";
+import { u, productUrl, PATHS, contentUrl } from "./i18n.js";
 
 export const siteName = (ctx) => ctx.refs.settings.company_name || ctx.env.SITE_NAME || "Shop";
 
@@ -39,6 +39,8 @@ export function renderPage(ctx, o) {
   const switcher = langs.map((l) => l === lang ? `<span class="lang on" aria-current="true">${l.toUpperCase()}</span>`
     : `<a class="lang" hreflang="${l}" lang="${l}" href="${esc(alts[l] || `/${l}/`)}">${l.toUpperCase()}</a>`).join("");
   const contactLines = [s.hotline && `<a href="tel:${esc(String(s.hotline).replace(/[^0-9+]/g, ""))}">${esc(s.hotline)}</a>`, s.contact_email && `<a href="mailto:${esc(s.contact_email)}">${esc(s.contact_email)}</a>`, s.address && esc(s.address)].filter(Boolean);
+  const cn = refs.contentNav, fPages = cn.pages.filter((x) => x.lang === lang), fPol = cn.policies.filter((x) => x.lang === lang);
+  const footLinks = (h, rows, kind) => rows.length ? `<div><strong>${esc(h)}</strong><ul class="flist">${rows.map((r) => `<li><a href="${esc(contentUrl(lang, kind, r.slug))}">${esc(r.title)}</a></li>`).join("")}</ul></div>` : "";
   const body = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>${o.desc ? `<meta name="description" content="${esc(o.desc)}">` : ""}
 <link rel="canonical" href="${esc(canon)}">${o.noindex ? '<meta name="robots" content="noindex,follow">' : ""}${hreflang}
@@ -47,11 +49,11 @@ ${o.desc ? `<meta property="og:description" content="${esc(o.desc)}">` : ""}${o.
 <link rel="stylesheet" href="/assets/shop.css?v=1">${(o.jsonld || []).join("")}</head>
 <body><a class="skip" href="#main">${esc(T.skip)}</a>
 <header class="top"><div class="wrap bar"><a class="logo" href="/${lang}/">${esc(name)}</a>
-<nav class="nav" aria-label="main"><a href="${u(lang, "products")}">${esc(T.nav_products)}</a><a href="${u(lang, "quote")}">${esc(T.nav_quote)}</a><a href="${u(lang, "contact")}">${esc(T.nav_contact)}</a></nav>
+<nav class="nav" aria-label="main"><a href="${u(lang, "products")}">${esc(T.nav_products)}</a>${cn.services.some((x) => x.lang === lang) ? `<a href="${u(lang, "services")}">${esc(T.nav_services)}</a>` : ""}${cn.hasPosts[lang] ? `<a href="${u(lang, "news")}">${esc(T.nav_news)}</a>` : ""}<a href="${u(lang, "quote")}">${esc(T.nav_quote)}</a><a href="${u(lang, "contact")}">${esc(T.nav_contact)}</a></nav>
 <form class="search" action="${u(lang, "products")}" method="get" role="search"><input type="search" name="q" placeholder="${esc(T.search_ph)}" aria-label="${esc(T.search)}"><button class="btn" type="submit">${esc(T.search)}</button></form>
 <div class="right"><span class="langs">${switcher}</span><a class="cartlink" href="${u(lang, "cart")}">${esc(T.cart)} <span id="cart-count" class="badge" hidden>0</span></a></div></div></header>
 <main id="main" class="wrap">${o.body}</main>
-<footer class="foot"><div class="wrap"><strong>${esc(name)}</strong>${contactLines.length ? `<p>${contactLines.join(" · ")}</p>` : ""}${s.working_hours ? `<p>${esc(T.working)}: ${esc(s.working_hours)}</p>` : ""}<p class="muted">© ${new Date().getFullYear()} ${esc(name)}. ${esc(T.footer_rights)}</p></div></footer>
+<footer class="foot"><div class="wrap"><div class="footcols"><div><strong>${esc(name)}</strong>${contactLines.length ? `<p>${contactLines.join(" · ")}</p>` : ""}${s.working_hours ? `<p>${esc(T.working)}: ${esc(s.working_hours)}</p>` : ""}</div>${footLinks(T.company, fPages, "page")}${footLinks(T.policies_title, fPol, "policy")}</div><p class="muted">© ${new Date().getFullYear()} ${esc(name)}. ${esc(T.footer_rights)}</p></div></footer>
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <script type="application/json" id="i18n">${i18n}</script>
 ${o.forms && sitekey ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}

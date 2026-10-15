@@ -1,12 +1,13 @@
 export const PATHS = {
-  vi: { products: "san-pham", category: "danh-muc", brand: "thuong-hieu", cart: "gio-hang", checkout: "thanh-toan", confirm: "dat-hang-thanh-cong", quote: "bao-gia-so-luong-lon", quoteDone: "da-gui", contact: "lien-he" },
-  en: { products: "products", category: "category", brand: "brand", cart: "cart", checkout: "checkout", confirm: "order-confirmation", quote: "request-quote", quoteDone: "sent", contact: "contact" }
+  vi: { products: "san-pham", category: "danh-muc", brand: "thuong-hieu", cart: "gio-hang", checkout: "thanh-toan", confirm: "dat-hang-thanh-cong", quote: "bao-gia-so-luong-lon", quoteDone: "da-gui", contact: "lien-he", news: "tin-tuc", services: "dich-vu", policies: "chinh-sach", postCat: "chuyen-muc" },
+  en: { products: "products", category: "category", brand: "brand", cart: "cart", checkout: "checkout", confirm: "order-confirmation", quote: "request-quote", quoteDone: "sent", contact: "contact", news: "news", services: "services", policies: "policies", postCat: "topic" }
 };
 export const u = (lang, key, ...rest) => "/" + [lang, PATHS[lang][key], ...rest].filter(Boolean).join("/") + "/";
 export const productUrl = (lang, slug) => u(lang, "products", slug);
 
 const D = {
   vi: {
+    nav_news: "Tin tức", nav_services: "Dịch vụ", h_latest_news: "Tin tức mới", read_more: "Xem chi tiết", news_title: "Tin tức & kiến thức", services_title: "Dịch vụ", policies_title: "Chính sách", all_topics: "Tất cả chuyên mục", posted_on: "Đăng ngày", empty_content: "Chưa có nội dung.", company: "Công ty", cta_contact: "Liên hệ tư vấn", by: "Tác giả",
     nav_products: "Sản phẩm", nav_quote: "Báo giá SLL", nav_contact: "Liên hệ", search_ph: "Tìm sản phẩm, mã SKU…", search: "Tìm", cart: "Giỏ hàng", home: "Trang chủ", skip: "Bỏ qua điều hướng",
     hero_sub: "Xe điện chính hãng — giá bán lẻ công khai, báo giá riêng cho đơn mua số lượng lớn.", hero_cta: "Xem sản phẩm", hero_cta2: "Yêu cầu báo giá SLL",
     h_cats: "Danh mục sản phẩm", h_featured: "Sản phẩm nổi bật", h_new: "Sản phẩm mới", h_brands: "Thương hiệu phân phối",
@@ -35,6 +36,7 @@ const D = {
     err_ORIGIN: "Yêu cầu bị từ chối.", err_INVALID_ITEM: "Giỏ hàng có dữ liệu không hợp lệ."
   },
   en: {
+    nav_news: "News", nav_services: "Services", h_latest_news: "Latest news", read_more: "Read more", news_title: "News & insights", services_title: "Services", policies_title: "Policies", all_topics: "All topics", posted_on: "Posted on", empty_content: "No content yet.", company: "Company", cta_contact: "Contact us", by: "By",
     nav_products: "Products", nav_quote: "Bulk quote", nav_contact: "Contact", search_ph: "Search products, SKU…", search: "Search", cart: "Cart", home: "Home", skip: "Skip navigation",
     hero_sub: "Genuine electric vehicles — public retail prices, tailored quotes for bulk orders.", hero_cta: "Browse products", hero_cta2: "Request a bulk quote",
     h_cats: "Product categories", h_featured: "Featured products", h_new: "New arrivals", h_brands: "Brands we distribute",
@@ -64,3 +66,6 @@ const D = {
   }
 };
 export const tr = (lang) => D[lang] || D.vi;
+const KEY = { post: "news", service: "services", policy: "policies" };
+export const listUrl = (lang, kind) => u(lang, KEY[kind]);
+export const contentUrl = (lang, kind, slug) => (kind === "page" ? `/${lang}/${slug}/` : u(lang, KEY[kind], slug));

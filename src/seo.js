@@ -1,5 +1,5 @@
 import { rest, getRefs } from "./db.js";
-import { u, productUrl, PATHS } from "./i18n.js";
+import { u, productUrl, PATHS, contentUrl, listUrl } from "./i18n.js";
 import { esc } from "./util.js";
 
 export function robots(siteUrl) {
@@ -28,6 +28,17 @@ export async function sitemap(env, siteUrl) {
   for (const alts of byProd.values()) add(alts);
   for (const c of refs.cats) add(Object.fromEntries(Object.entries(c.tr).map(([l, t]) => [l, u(l, "products", PATHS[l].category, t.slug)])));
   for (const b of refs.brands) add(Object.fromEntries(Object.entries(b.tr).map(([l, t]) => [l, u(l, "products", PATHS[l].brand, t.slug)])));
+  const ct = await allPages(env, "content_translations?select=item_id,lang,slug,content_items!inner(kind)&order=item_id.asc");
+  const byItem = new Map(), present = new Map();
+  for (const t of ct) {
+    const k = t.content_items.kind;
+    if (!byItem.has(t.item_id)) byItem.set(t.item_id, {});
+    byItem.get(t.item_id)[t.lang] = contentUrl(t.lang, k, t.slug);
+    if (!present.has(k)) present.set(k, {});
+    present.get(k)[t.lang] = listUrl(t.lang, k === "page" ? "post" : k);
+  }
+  for (const alts of byItem.values()) add(alts);
+  for (const [k, alts] of present) if (k !== "page") add(alts);
   const body = urls.flatMap((alts) => Object.entries(alts).map(([l, p]) =>
     `<url><loc>${esc(siteUrl + p)}</loc>${Object.entries(alts).map(([l2, p2]) => `<xhtml:link rel="alternate" hreflang="${l2}" href="${esc(siteUrl + p2)}"/>`).join("")}${alts.vi ? `<xhtml:link rel="alternate" hreflang="x-default" href="${esc(siteUrl + alts.vi)}"/>` : ""}</url>`)).join("");
   return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${body}</urlset>`;
