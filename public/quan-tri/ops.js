@@ -226,7 +226,7 @@ async function viewContacts() {
 }
 
 // ================= CÀI ĐẶT =================
-const SET_FIELDS = [["company_name", "Tên công ty / thương hiệu", "text"], ["hotline", "Hotline 1", "text"], ["hotline_2", "Hotline 2 (tuỳ chọn)", "text"], ["hotline_3", "Hotline 3 (tuỳ chọn)", "text"], ["contact_email", "Email liên hệ", "email"], ["address", "Địa chỉ", "text"], ["working_hours", "Giờ làm việc", "text"],
+const SET_FIELDS = [["company_name", "Tên công ty / thương hiệu", "text"], ["hotline", "Hotline 1", "text"], ["hotline_2", "Hotline 2 (tuỳ chọn)", "text"], ["hotline_3", "Hotline 3 (tuỳ chọn)", "text"], ["contact_email", "Email liên hệ", "email"], ["address", "Địa chỉ", "text"], ["working_hours", "Giờ làm việc", "text"], ["zalo_url", "Liên kết Zalo (vd https://zalo.me/0900000000) — hiện nút nổi", "text"], ["messenger_url", "Liên kết Messenger (vd https://m.me/tên-trang) — hiện nút nổi", "text"],
   ["vat_rate", "Thuế suất VAT (%) — giá niêm yết CHƯA gồm VAT", "number"], ["pay_cod_enabled", "Bật thanh toán khi nhận hàng (COD)", "bool"],
   ["bank_name", "Ngân hàng", "text"], ["bank_account", "Số tài khoản", "text"], ["bank_holder", "Chủ tài khoản", "text"], ["bank_note", "Nội dung chuyển khoản hướng dẫn khách", "text"]];
 async function viewSettings() {
@@ -234,8 +234,8 @@ async function viewSettings() {
   for (const r of [s, sh]) if (r.error) throw r.error;
   const cur = Object.fromEntries(s.data.map((r) => [r.key, r.value])), canW = can("settings.write");
   const f = ([k, label, type]) => type === "bool" ? `<div>${chk(k, label, cur[k] === true || cur[k] === "true")}</div>` : inp(k, label, cur[k] ?? "", type === "number" ? 'type="number" min="0" max="100" step="0.01"' : type === "email" ? 'type="email"' : "");
-  $("#view").innerHTML = `<h1>Cài đặt</h1><form id="set-form" class="card"><h2>Thông tin doanh nghiệp</h2><div class="form-grid">${SET_FIELDS.slice(0, 7).map(f).join("")}</div>
-  <h2>Thuế & thanh toán</h2><div class="form-grid">${SET_FIELDS.slice(7).map(f).join("")}</div>
+  $("#view").innerHTML = `<h1>Cài đặt</h1><form id="set-form" class="card"><h2>Thông tin doanh nghiệp</h2><div class="form-grid">${SET_FIELDS.slice(0, 9).map(f).join("")}</div>
+  <h2>Thuế & thanh toán</h2><div class="form-grid">${SET_FIELDS.slice(9).map(f).join("")}</div>
   <p class="hint">Chuyển khoản chỉ hiện ở checkout khi điền ĐỦ ngân hàng + số tài khoản + chủ tài khoản. Phương thức chưa bật sẽ không hiển thị và server từ chối nhận.</p>
   <div class="actions">${canW ? '<button class="btn primary" type="submit">Lưu cài đặt</button>' : '<span class="muted">Chỉ xem</span>'}</div></form>
   <h2>Phí vận chuyển</h2><p class="hint">Quy tắc không ghi tỉnh/thành = mặc định. Tên tỉnh/thành phải khớp (không phân biệt hoa thường) với tên khách nhập khi đặt hàng. Không có quy tắc nào = phí 0.</p>
@@ -250,6 +250,7 @@ async function viewSettings() {
       const el = g(form, k);
       if (type === "bool") rows.push({ key: k, value: el.checked, is_public: true });
       else if (type === "number") { const n = el.value === "" ? null : Number(el.value); if (n == null || !(n >= 0 && n <= 100)) throw new Error("Thuế suất VAT phải từ 0 đến 100."); rows.push({ key: k, value: n, is_public: true }); }
+      else if ((k === "zalo_url" || k === "messenger_url") && el.value.trim() && !/^https:\/\/[^\s<>"']+$/.test(el.value.trim())) throw new Error("Liên kết Zalo/Messenger phải bắt đầu bằng https://");
       else if (el.value.trim()) rows.push({ key: k, value: el.value.trim(), is_public: true }); else empty.push(k);
     }
     const r = await db().from("site_settings").upsert(rows, { onConflict: "key" }); if (r.error) throw r.error;

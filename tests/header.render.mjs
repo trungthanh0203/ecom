@@ -11,3 +11,12 @@ let bad = 0; for (const m of must) if (!t.includes(m)) { console.log("THIẾU:",
 const none = await renderPage(mk([], { company_name: "Cty" }), { body: "", path: "/vi/" }); const t2 = typeof none === "string" ? none : await none.text();
 if (t2.includes('class="hotlines"')) { console.log("hotlines hiện dù chưa nhập"); bad++; }
 console.log(bad ? "FAIL" : "OK"); process.exitCode = bad ? 1 : 0;
+{
+  const c = mk([], { company_name: "Cty", hotline: "0900 111 222", zalo_url: "https://zalo.me/0900111222", messenger_url: "javascript:alert(1)" });
+  c.refs.cats.push({ id: 3, parent_id: null, tr: { vi: { slug: "xe-dap", name: "Xe đạp điện" } } });
+  c.refs.brands = [{ id: 7, tr: { vi: { slug: "giant", name: "Giant" } } }]; c.refs.catBrands = { 3: new Set([7]) };
+  const r2 = await renderPage(c, { body: "", path: "/vi/" }), h = typeof r2 === "string" ? r2 : await r2.text();
+  let b2 = 0; for (const m of ['class="mega"', "Xe 50cc", "thuong-hieu/giant", "fc-zalo", "fc-tel"]) if (!h.includes(m)) { console.log("THIẾU:", m); b2++; }
+  if (h.includes("fc-mess") || h.includes("javascript:alert")) { console.log("liên kết Messenger không https vẫn hiện"); b2++; }
+  console.log(b2 ? "FAIL mega/float" : "OK mega/float"); if (b2) process.exitCode = 1;
+}

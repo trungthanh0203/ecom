@@ -185,5 +185,15 @@ const cForm = $("#contact-form");
 if (cForm) bindForm(cForm, "/api/contact", "contact", (fd) => ({ name: fd.get("name"), phone: fd.get("phone") || undefined, email: fd.get("email") || undefined, message: fd.get("message") }),
   () => { cForm.reset(); const m = $("#form-msg", cForm); m.className = "ok"; m.textContent = T.ct_ok; m.hidden = false; track("generate_lead", { lead_type: "contact" }); });
 
+// ---- banner tự chuyển ----
+$$("[data-slider]").forEach((el) => {
+  const sl = $$(".slide", el); if (sl.length < 2) return; let i = 0, t; el.classList.add("ready");
+  const dots = document.createElement("div"); dots.className = "dots";
+  const go = (n) => { i = (n + sl.length) % sl.length; sl.forEach((x, k) => x.classList.toggle("on", k === i)); $$("button", dots).forEach((x, k) => x.classList.toggle("on", k === i)); };
+  const play = () => { clearInterval(t); if (matchMedia("(prefers-reduced-motion: reduce)").matches) return; t = setInterval(() => go(i + 1), 5000); };
+  sl.forEach((_, n) => { const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", String(n + 1)); b.addEventListener("click", () => { go(n); play(); }); dots.appendChild(b); }); el.appendChild(dots);
+  el.addEventListener("mouseenter", () => clearInterval(t)); el.addEventListener("mouseleave", play); go(0); play();
+});
+
 badge(); pageEvents();
 })();

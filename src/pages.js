@@ -69,7 +69,8 @@ function renderBlock(ctx, b, data) {
   if (b.type === "showcase") {
     const im = (path, altKey) => path ? `<img src="${esc(imgUrl(env, path))}" alt="${esc(txtOf(b, altKey))}" decoding="async">` : "";
     const wrapA = (html, urlKey) => { const url = safeUrl(txtOf(b, urlKey)); return html && url ? `<a href="${esc(url)}">${html}</a>` : html; };
-    const big = b.cfg.image_path ? `<div class="sc-main has-img">${wrapA(im(b.cfg.image_path, "alt1"), "url1")}<h1 class="sr-only">${esc(title)}</h1></div>`
+    const slides = [["image_path", "alt1", "url1"], ["image4_path", "alt4", "url4"], ["image5_path", "alt5", "url5"]].filter(([k]) => b.cfg[k]).map(([k, al, ur], n) => `<div class="slide${n ? "" : " on"}">${wrapA(im(b.cfg[k], al), ur)}</div>`);
+    const big = slides.length ? `<div class="sc-main has-img slider"${slides.length > 1 ? " data-slider" : ""}>${slides.join("")}<h1 class="sr-only">${esc(title)}</h1></div>`
       : `<div class="sc-main hero"><div><h1>${esc(title)}</h1>${txtOf(b, "subtitle") ? `<p>${esc(txtOf(b, "subtitle"))}</p>` : ""}${(() => { const l = txtOf(b, "cta1_label"), url = safeUrl(txtOf(b, "cta1_url")); return l && url ? `<p><a class="btn buy" href="${esc(url)}">${esc(l)}</a></p>` : ""; })()}</div></div>`;
     const side = [wrapA(im(b.cfg.image2_path, "alt2"), "url2"), wrapA(im(b.cfg.image3_path, "alt3"), "url3")].filter(Boolean).map((x) => `<div class="sc-banner">${x}</div>`).join("");
     const posts = data && data.length ? `<div class="sc-news card"><div class="sc-news-h"><h2>${esc(txtOf(b, "news_title") || T.h_latest_news)}</h2><a href="${esc(listUrl(lang, "post"))}">${esc(T.view_all)}</a></div><ul>${data.map((r) => { const it = r.content_items, href = contentUrl(lang, "post", r.slug); return `<li><a href="${esc(href)}">${it.cover_path ? `<img src="${esc(imgUrl(env, it.cover_path))}" alt="" loading="lazy" width="80" height="52">` : ""}<span>${esc(r.title)}</span></a></li>`; }).join("")}</ul></div>` : "";

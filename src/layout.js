@@ -51,7 +51,19 @@ export function renderPage(ctx, o) {
   const mItem = (m) => `<li><a href="${esc(m.url)}"${m.children.length ? ' aria-haspopup="true"' : ""}>${esc(m.label)}</a>${m.children.length ? `<ul class="sub">${m.children.map((c) => `<li><a href="${esc(c.url)}">${esc(c.label)}</a></li>`).join("")}</ul>` : ""}</li>`;
   const catsTop = refs.cats.filter((c) => !c.parent_id && c.tr[lang]?.slug), catKids = (c) => refs.cats.filter((k) => k.parent_id === c.id && k.tr[lang]?.slug);
   const catHref = (c) => u(lang, "products", PATHS[lang].category, c.tr[lang].slug);
-  const fallbackNav = `<ul class="menu"><li><a href="${u(lang, "products")}">${esc(T.nav_products)}</a></li>${catsTop.map((c) => `<li><a href="${esc(catHref(c))}"${catKids(c).length ? ' aria-haspopup="true"' : ""}>${esc(c.tr[lang].name)}</a>${catKids(c).length ? `<ul class="sub">${catKids(c).map((k) => `<li><a href="${esc(catHref(k))}">${esc(k.tr[lang].name)}</a></li>`).join("")}</ul>` : ""}</li>`).join("")}${cn.services.some((x) => x.lang === lang) ? `<li><a href="${u(lang, "services")}">${esc(T.nav_services)}</a></li>` : ""}<li><a href="${u(lang, "quote")}">${esc(T.nav_quote)}</a></li></ul>`;
+  const brandOf = (id) => refs.brands.find((x) => x.id === id && x.tr[lang]?.slug);
+  const brandsOfCat = (c) => [...((refs.catBrands && refs.catBrands[c.id]) || [])].map(brandOf).filter(Boolean);
+  const megaOf = (c) => {
+    const kids = catKids(c), brs = kids.length ? [] : brandsOfCat(c); if (!kids.length && !brs.length) return "";
+    const items = kids.length ? kids.map((k) => `<li><a href="${esc(catHref(k))}">${esc(k.tr[lang].name)}</a></li>`) : brs.map((b) => `<li><a href="${esc(u(lang, "products", PATHS[lang].brand, b.tr[lang].slug))}">${esc(b.tr[lang].name)}</a></li>`);
+    return `<div class="mega"><div class="mega-h"><a href="${esc(catHref(c))}">${esc(c.tr[lang].name)}</a><span class="muted">${esc(kids.length ? T.mega_types : T.mega_brands)}</span></div><ul class="mega-list">${items.join("")}</ul><a class="mega-all" href="${esc(catHref(c))}">${esc(T.view_all)} →</a></div>`;
+  };
+  const fallbackNav = `<ul class="menu">${catsTop.map((c) => { const mg = megaOf(c); return `<li${mg ? ' class="has-mega"' : ""}><a href="${esc(catHref(c))}"${mg ? ' aria-haspopup="true"' : ""}>${esc(c.tr[lang].name)}</a>${mg}</li>`; }).join("")}${cn.services.some((x) => x.lang === lang) ? `<li><a href="${u(lang, "services")}">${esc(T.nav_services)}</a></li>` : ""}<li><a href="${u(lang, "quote")}">${esc(T.nav_quote)}</a></li></ul>`;
+  const httpsUrl = (v) => (typeof v === "string" && /^https:\/\/[^\s<>"']+$/.test(v) ? v : "");
+  const firstHot = [s.hotline, s.hotline_2, s.hotline_3].find(Boolean), zalo = httpsUrl(s.zalo_url), mess = httpsUrl(s.messenger_url);
+  const icoMess = '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="#fff" d="M12 2C6.5 2 2 6.1 2 11.3c0 2.9 1.4 5.5 3.6 7.2V22l3.3-1.8c1 .3 2 .4 3.1.4 5.5 0 10-4.1 10-9.3S17.5 2 12 2zm1 12.5-2.5-2.7-4.9 2.7 5.4-5.7 2.6 2.7 4.8-2.7-5.4 5.7z"/></svg>';
+  const icoTel = '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="#fff" d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25c1.1.37 2.3.57 3.6.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.3.2 2.5.57 3.6a1 1 0 0 1-.25 1z"/></svg>';
+  const floatBtns = firstHot || zalo || mess ? `<div class="floatc" aria-label="${esc(T.contact_quick)}">${mess ? `<a class="fc fc-mess" href="${esc(mess)}" rel="noopener noreferrer" target="_blank" aria-label="Messenger">${icoMess}</a>` : ""}${zalo ? `<a class="fc fc-zalo" href="${esc(zalo)}" rel="noopener noreferrer" target="_blank" aria-label="Zalo">Zalo</a>` : ""}${firstHot ? `<a class="fc fc-tel" href="tel:${esc(String(firstHot).replace(/[^0-9+]/g, ""))}" aria-label="${esc(T.hotline)} ${esc(firstHot)}">${icoTel}</a>` : ""}</div>` : "";
   const mainNav = mainMenu.length ? `<ul class="menu">${mainMenu.map(mItem).join("")}</ul>` : fallbackNav;
   const topMenu = buildMenu(refs.menus, "top", lang);
   const topLinks = topMenu.length ? topMenu.map((m) => `<a href="${esc(m.url)}">${esc(m.label)}</a>`).join("")
@@ -65,7 +77,7 @@ export function renderPage(ctx, o) {
 <link rel="canonical" href="${esc(canon)}">${robots ? `<meta name="robots" content="${robots}">` : ""}${cfg.verifyGoogle ? `<meta name="google-site-verification" content="${esc(cfg.verifyGoogle)}">` : ""}${cfg.verifyBing ? `<meta name="msvalidate.01" content="${esc(cfg.verifyBing)}">` : ""}${cfg.favicon ? `<link rel="icon" href="${esc(imgUrl(env, cfg.favicon))}">` : ""}${hreflang}
 <meta property="og:site_name" content="${esc(name)}"><meta property="og:title" content="${esc(o.title || name)}"><meta property="og:type" content="${o.ogType || "website"}"><meta property="og:url" content="${esc(canon)}">
 ${o.desc ? `<meta property="og:description" content="${esc(o.desc)}">` : ""}${ogImg ? `<meta property="og:image" content="${esc(ogImg)}">` : ""}<meta name="twitter:card" content="${ogImg ? "summary_large_image" : "summary"}"><meta name="twitter:title" content="${esc(o.title || name)}">${o.desc ? `<meta name="twitter:description" content="${esc(o.desc)}">` : ""}${ogImg ? `<meta name="twitter:image" content="${esc(ogImg)}">` : ""}<meta property="og:locale" content="${lang === "vi" ? "vi_VN" : "en_US"}">
-<link rel="stylesheet" href="/assets/shop.css?v=2">${(o.jsonld || []).join("")}</head>
+<link rel="stylesheet" href="/assets/shop.css?v=3">${(o.jsonld || []).join("")}</head>
 <body><a class="skip" href="#main">${esc(T.skip)}</a>
 <header class="top"><div class="util"><div class="wrap"><nav class="toplinks" aria-label="top">${topLinks}</nav><span class="langs">${switcher}</span></div></div>
 <div class="head"><div class="wrap bar"><a class="logo" href="/${lang}/">${cfg.logo ? `<img src="${esc(imgUrl(env, cfg.logo))}" alt="${esc(name)}" height="48">` : esc(name)}</a>
@@ -75,6 +87,7 @@ ${hotlines ? `<div class="hotlines">${hotlines}</div>` : ""}<a class="cartlink" 
 <main id="main" class="wrap">${o.body}</main>
 <footer class="foot"><div class="wrap"><div class="footcols"><div><strong>${esc(name)}</strong>${contactLines.length ? `<p>${contactLines.join(" · ")}</p>` : ""}${s.working_hours ? `<p>${esc(T.working)}: ${esc(s.working_hours)}</p>` : ""}</div>${footMenu.length ? footMenuHtml : footLinks(T.company, fPages, "page") + footLinks(T.policies_title, fPol, "policy") + moreLinks}</div>${cfg.social.length ? `<p class="social">${cfg.social.map(([l, u2]) => `<a href="${esc(u2)}" rel="noopener noreferrer" target="_blank">${esc(l)}</a>`).join(" · ")}</p>` : ""}<p class="muted">© ${new Date().getFullYear()} ${esc(name)}. ${esc(T.footer_rights)}${consentOn ? ` · <button type="button" class="linkbtn" data-cookie-settings>${esc(T.cookie_settings)}</button>` : ""}</p></div></footer>
 ${consentOn ? `<div id="consent" class="consent" role="dialog" aria-label="${esc(T.cookie_settings)}" hidden><p>${esc(T.consent_text)}</p><div><button type="button" class="btn buy" data-consent="granted">${esc(T.consent_accept)}</button> <button type="button" class="btn" data-consent="denied">${esc(T.consent_decline)}</button></div></div>` : ""}
+${floatBtns}
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <script type="application/json" id="i18n">${i18n}</script>
 ${o.forms && sitekey ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ""}
