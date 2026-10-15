@@ -1,0 +1,31 @@
+# Sao lưu tự động hằng ngày. YÊU CẦU: repo ở chế độ PRIVATE; đặt 3 secret trong Settings > Secrets and variables > Actions:
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BACKUP_PASSPHRASE (>= 12 ký tự, lưu thêm ở nơi khác).
+# Tệp sao lưu được MÃ HOÁ trước khi lưu thành artifact (giữ 30 ngày). Tải về: tab Actions > lần chạy > Artifacts.
+name: backup
+on:
+  schedule:
+    - cron: "17 18 * * *"   # 01:17 giờ Việt Nam mỗi ngày
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/backup.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_DIR: out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecom-backup
+          path: out/ecom-backup-*.bak.enc
+          retention-days: 30
+          if-no-files-found: error

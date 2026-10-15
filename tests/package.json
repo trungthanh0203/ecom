@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node run.mjs && node content.test.mjs && node staff.test.mjs",
+    "test": "node run.mjs && node content.test.mjs && node staff.test.mjs && node backup-restore.test.mjs && node cli.test.mjs",
     "test:live": "node live.mjs",
-    "test:live-admin": "node live-admin.mjs"
+    "test:live-admin": "node live-admin.mjs",
+    "test:backup": "node backup-restore.test.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.2.17",

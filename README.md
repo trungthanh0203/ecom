@@ -53,6 +53,12 @@ Kiểm tra giao diện mới chỉ bằng client Supabase GIẢ (bắt lỗi JS 
 - Kiểm thử: `npm test` (DB), `admin-api.test.mjs` với `mock-supabase-admin.mjs` (API Worker, máy chủ GIẢ), `npm run test:live-admin` (HỆ THỐNG THẬT — bạn tự chạy, cần SA_EMAIL/SA_PASS/WORKER_URL trong `tests/.env.test`).
 - Giới hạn: bắt buộc đổi mật khẩu tạm là ở giao diện (không có cơ chế chặn ở máy chủ); chưa có 2FA, chưa có email mời, chưa sửa được ma trận quyền trên giao diện (sửa bằng SQL).
 
+## Sao lưu & khôi phục (cần chạy thêm `db/migrations/011_backup_restore.sql`) — xem `docs/SAO_LUU_KHOI_PHUC.md`
+- `scripts/backup.mjs` (28 bảng + tài khoản nhân viên không mật khẩu + ảnh Storage → 1 tệp mã hoá AES-256-GCM + manifest mã băm), `scripts/restore.mjs` (vào dự án Supabase TRỐNG; đối chiếu từng bảng/tệp sau khi nạp; chạy lại an toàn; chặn khôi phục vào chính dự án nguồn), workflow `.github/workflows/backup.yml` (hằng ngày, artifact 30 ngày). Gói Free của Supabase KHÔNG có sao lưu tự động và sao lưu của Supabase không gồm Storage — nên cần bộ này.
+- Khôi phục dùng hàm `restore_load` (service_role, nguyên tử theo từng lần gọi: tắt trigger nghiệp vụ của đúng bảng đích → nạp → bật lại; từ chối bảng đích có dữ liệu), `restore_fix_sequences`.
+- Kiểm thử: `tests/backup-restore.test.mjs` (diễn tập trên Postgres thật: sao lưu → khôi phục CSDL mới → so từng bảng, RLS/trigger/sequence, đổi mã tài khoản, đích không trống, gián đoạn giữa chừng, tệp bị sửa/sai mật khẩu, bản chụp không nhất quán), `tests/cli.test.mjs` (lớp REST + lệnh với máy chủ GIẢ giao diện Supabase).
+- CHƯA làm: diễn tập trên 2 dự án Supabase thật (bạn tự làm theo mục 6 của sổ tay); lưu bản sao lưu ra ngoài GitHub tự động (hiện: tải tay mỗi tuần).
+
 ## Chưa làm / giới hạn đã biết
 - Trang công khai CHƯA kiểm thử với sản phẩm thật (DB chưa có sản phẩm) và API ghi (checkout/báo giá/liên hệ) CHƯA kiểm thử đầu-cuối trên Supabase thật.
 - Chưa có: trang nội dung (giới thiệu, tin tức, dịch vụ, chính sách), lọc theo thuộc tính kỹ thuật, sắp xếp theo tên, GA4/GTM, email thông báo, cache trang.
