@@ -27,10 +27,11 @@ export async function home(ctx) {
   const data = await Promise.all(blocks.map(async (b) => {
     if (b.type === "products") { const src = b.cfg.source; return (await listProducts(env, lang, { featured: src === "featured" || undefined, isNew: src === "new" || undefined, limit: clampInt(b.cfg.limit, 1, 24, 8) })).items; }
     if (b.type === "news") return refs.contentNav.hasPosts[lang] ? (await listContent(env, lang, "post", { limit: clampInt(b.cfg.limit, 1, 12, 3) })).items : [];
+    if (b.type === "showcase") return refs.contentNav.hasPosts[lang] ? (await listContent(env, lang, "post", { limit: clampInt(b.cfg.limit, 1, 12, 4) })).items : [];
     if (b.type === "text") return sanitize(b.txt.body || "", { origin: env.SUPABASE_URL });
     return null;
   }));
-  const hero = blocks.find((b) => b.type === "hero");
+  const hero = blocks.find((b) => b.type === "hero" || b.type === "showcase");
   const org = { "@context": "https://schema.org", "@type": "Organization", name, url: siteUrl + "/" + lang + "/", ...(s.hotline ? { telephone: s.hotline } : {}), ...(s.contact_email ? { email: s.contact_email } : {}), ...(s.address ? { address: s.address } : {}), ...(cfg.logo ? { logo: imgUrl(env, cfg.logo) } : {}), ...(cfg.social.length ? { sameAs: cfg.social.map(([, u2]) => u2) } : {}) };
   const site = { "@context": "https://schema.org", "@type": "WebSite", name, url: siteUrl + "/" + lang + "/", inLanguage: lang, potentialAction: { "@type": "SearchAction", target: `${siteUrl}${u(lang, "products")}?q={search_term_string}`, "query-input": "required name=search_term_string" } };
   return renderPage(ctx, { title: null, rawTitle: cfg.homeTitle || undefined, desc: cfg.homeDesc || hero?.txt.subtitle || T.hero_sub, path: `/${lang}/`, alternates: { vi: "/vi/", en: "/en/" }, jsonld: [jsonLd(org), jsonLd(site)],
@@ -64,6 +65,15 @@ function renderBlock(ctx, b, data) {
     const img = b.cfg.image_path ? `<img class="hero-img" src="${esc(imgUrl(env, b.cfg.image_path))}" alt="" fetchpriority="high">` : "";
     const btn = (n, cls) => { const l = txtOf(b, `cta${n}_label`), url = safeUrl(txtOf(b, `cta${n}_url`)); return l && url ? `<a class="btn ${cls}" href="${esc(url)}">${esc(l)}</a> ` : ""; };
     return `<section class="hero${img ? " has-img" : ""}"><div><h1>${esc(title)}</h1>${txtOf(b, "subtitle") ? `<p>${esc(txtOf(b, "subtitle"))}</p>` : ""}<p>${btn(1, "buy")}${btn(2, "quote")}</p></div>${img}</section>`;
+  }
+  if (b.type === "showcase") {
+    const im = (path, altKey) => path ? `<img src="${esc(imgUrl(env, path))}" alt="${esc(txtOf(b, altKey))}" decoding="async">` : "";
+    const wrapA = (html, urlKey) => { const url = safeUrl(txtOf(b, urlKey)); return html && url ? `<a href="${esc(url)}">${html}</a>` : html; };
+    const big = b.cfg.image_path ? `<div class="sc-main has-img">${wrapA(im(b.cfg.image_path, "alt1"), "url1")}<h1 class="sr-only">${esc(title)}</h1></div>`
+      : `<div class="sc-main hero"><div><h1>${esc(title)}</h1>${txtOf(b, "subtitle") ? `<p>${esc(txtOf(b, "subtitle"))}</p>` : ""}${(() => { const l = txtOf(b, "cta1_label"), url = safeUrl(txtOf(b, "cta1_url")); return l && url ? `<p><a class="btn buy" href="${esc(url)}">${esc(l)}</a></p>` : ""; })()}</div></div>`;
+    const side = [wrapA(im(b.cfg.image2_path, "alt2"), "url2"), wrapA(im(b.cfg.image3_path, "alt3"), "url3")].filter(Boolean).map((x) => `<div class="sc-banner">${x}</div>`).join("");
+    const posts = data && data.length ? `<div class="sc-news card"><div class="sc-news-h"><h2>${esc(txtOf(b, "news_title") || T.h_latest_news)}</h2><a href="${esc(listUrl(lang, "post"))}">${esc(T.view_all)}</a></div><ul>${data.map((r) => { const it = r.content_items, href = contentUrl(lang, "post", r.slug); return `<li><a href="${esc(href)}">${it.cover_path ? `<img src="${esc(imgUrl(env, it.cover_path))}" alt="" loading="lazy" width="80" height="52">` : ""}<span>${esc(r.title)}</span></a></li>`; }).join("")}</ul></div>` : "";
+    return `<section class="showcase${side || posts ? "" : " solo"}">${big}${side || posts ? `<aside class="sc-side">${side}${posts}</aside>` : ""}</section>`;
   }
   if (b.type === "categories") {
     const cats = catAvail(ctx).filter((c) => !c.parent_id); if (!cats.length) return "";

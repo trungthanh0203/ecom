@@ -17,6 +17,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Kiểm tra đã có đủ secret (chỉ in có/không, không in giá trị)
+        run: |
+          for n in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY BACKUP_PASSPHRASE; do
+            if [ -n "${!n}" ]; then echo "$n: có"; else echo "$n: THIẾU (hãy thêm ở tab Secrets, không phải Variables)"; fi
+          done
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
       - run: node scripts/backup.mjs
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

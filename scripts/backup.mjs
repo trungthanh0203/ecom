@@ -10,7 +10,8 @@ import { restTransport } from "./transport-rest.mjs";
 
 async function main() {
   const { SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, BACKUP_PASSPHRASE: pass } = process.env, dir = process.env.BACKUP_DIR || "backups", keep = Number(process.env.BACKUP_KEEP || 14);
-  if (!url || !key) throw new Error("thiếu SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY");
+  const miss = [["SUPABASE_URL", url], ["SUPABASE_SERVICE_ROLE_KEY", key]].filter(([, v]) => !v).map(([n]) => n);
+  if (miss.length) throw new Error(`thiếu ${miss.join(" và ")} (giá trị đang RỖNG). Trên GitHub: biến phải nằm ở tab "Secrets" (không phải "Variables") của Settings → Secrets and variables → Actions, và tên phải đúng từng chữ.`);
   const plain = process.argv.includes("--no-encrypt");
   if (!pass && !plain) throw new Error("thiếu BACKUP_PASSPHRASE (tệp sao lưu chứa dữ liệu khách hàng nên PHẢI mã hoá; chỉ dùng --no-encrypt khi thử nghiệm)");
   console.log("Đang sao lưu…");
