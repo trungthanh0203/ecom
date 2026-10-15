@@ -217,6 +217,7 @@ function catModal(row, all) {
   $("#pc-del", m)?.addEventListener("click", (ev) => busy(ev.currentTarget, async () => { if (!confirm("Xoá chuyên mục? Các bài trong chuyên mục sẽ thành “không chuyên mục”.")) return; const d = await db().from("post_categories").delete().eq("id", row.id); if (d.error) throw d.error; closeModal(); toast("Đã xoá."); C.reload(); }));
 }
 
+C.rte = { rteMarkup, wireRte, readRte, cleanHtml };
 for (const [key, K] of Object.entries(KIND)) C.register({ key, title: K.title, group: "content", view: makeView(key) });
 C.register({ key: "postcats", title: "Chuyên mục tin", group: "content", view: viewPostCats });
 })();

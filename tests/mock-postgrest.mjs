@@ -24,6 +24,22 @@ http.createServer((req, res) => {
     else data = Object.entries(items).filter(([, v]) => v.kind === kind).map(([s, v]) => row(s, v, false));
   } else if (table === "post_categories") data = [{ id: 1, sort: 0, post_category_translations: [{ lang: "vi", slug: "tin-cong-ty", name: "Tin công ty" }] }];
   else if (table === "site_settings") data = [{ key: "company_name", value: "Cty Mock" }];
+  else if (table === "menus" && process.env.MODE === "cfg") data = [
+    { id: 1, location: "main", parent_id: null, sort: 0, label_vi: "Sản phẩm", label_en: "Products", url_vi: "/vi/san-pham/", url_en: "/en/products/" },
+    { id: 2, location: "main", parent_id: 1, sort: 0, label_vi: "Xe máy điện", label_en: null, url_vi: "/vi/san-pham/danh-muc/xe-may-dien/", url_en: null },
+    { id: 3, location: "main", parent_id: null, sort: 1, label_vi: "Liên hệ", label_en: "Contact", url_vi: "/vi/lien-he/", url_en: "/en/contact/" },
+    { id: 4, location: "main", parent_id: null, sort: 2, label_vi: "Độc hại", label_en: "Evil", url_vi: "javascript:alert(1)", url_en: "javascript:alert(1)" },
+    { id: 5, location: "main", parent_id: null, sort: 3, label_vi: "Chỉ có tiếng Việt", label_en: null, url_vi: "/vi/gioi-thieu/", url_en: null },
+    { id: 6, location: "footer", parent_id: null, sort: 0, label_vi: "Công ty", label_en: "Company", url_vi: "/vi/gioi-thieu/", url_en: "/en/about/" },
+    { id: 7, location: "footer", parent_id: 6, sort: 0, label_vi: "Giới thiệu", label_en: "About", url_vi: "/vi/gioi-thieu/", url_en: "/en/about/" },
+    { id: 8, location: "footer", parent_id: null, sort: 1, label_vi: "Hỗ trợ", label_en: null, url_vi: "/vi/lien-he/", url_en: null }];
+  else if (table === "home_blocks" && process.env.MODE === "cfg") data = [
+    { id: 1, block_type: "hero", sort: 0, payload: { vi: { title: "Xe điện số 1 <b>VN</b>", subtitle: "Mô tả hero", cta1_label: "Mua ngay", cta1_url: "/vi/san-pham/", cta2_label: "Nút độc hại", cta2_url: "javascript:bad()" }, cfg: { image_path: "site/h.webp" } } },
+    { id: 2, block_type: "banner", sort: 1, payload: { vi: { alt: "Khuyến mãi tháng 10", url: "/vi/lien-he/" }, cfg: { image_path: "site/b.webp" } } },
+    { id: 3, block_type: "text", sort: 2, payload: { vi: { title: "Về chúng tôi", body: "<p>Xin <strong>chào</strong></p><script>alert(1)</script><img src=\"/a.png\" onerror=\"x()\">" } } },
+    { id: 4, block_type: "cta", sort: 3, payload: { vi: { title: "Mua sỉ?", text: "Liên hệ", button_label: "Báo giá", button_url: "/vi/bao-gia-so-luong-lon/" } } },
+    { id: 5, block_type: "products", sort: 4, payload: { en: { title: "Only English block" }, cfg: { source: "featured", limit: 99 } } },
+    { id: 6, block_type: "products", sort: 5, payload: { vi: { title: "Nổi bật" }, cfg: { source: "featured", limit: 99 } } }];
   const body = JSON.stringify(data);
   res.writeHead(200, { "content-type": "application/json", "content-range": `0-${Math.max(0, data.length - 1)}/${data.length}` }); res.end(body);
 }).listen(port, "127.0.0.1", () => console.log("mock postgrest on", port));

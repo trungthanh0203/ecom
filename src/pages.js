@@ -1,6 +1,6 @@
 import { esc, vnd, jsonLd, priceInfo, imgUrl, mainImage, truthy } from "./util.js";
 import { u, productUrl, PATHS, contentUrl, listUrl } from "./i18n.js";
-import { sanitize } from "./sanitize.js";
+import { sanitize, okHref } from "./sanitize.js";
 import { renderPage, productCard, breadcrumbs, breadcrumbLd, siteName } from "./layout.js";
 import { listProducts, getProduct, listContent, getContent } from "./catalog.js";
 import { descendants } from "./db.js";
@@ -23,17 +23,68 @@ export function notFound(ctx) {
 
 export async function home(ctx) {
   const { env, lang, T, refs, siteUrl } = ctx, s = refs.settings, name = siteName(ctx);
-  const [feat, neu, news] = await Promise.all([listProducts(env, lang, { featured: true, limit: 8 }), listProducts(env, lang, { isNew: true, limit: 8 }), refs.contentNav.hasPosts[lang] ? listContent(env, lang, "post", { limit: 3 }) : { items: [] }]);
-  const cats = catAvail(ctx).filter((c) => !c.parent_id), brands = refs.brands.filter((b) => b.tr[lang]);
-  const section = (h, items) => items.length ? `<section><h2>${esc(h)}</h2><div class="grid">${items.map((p) => productCard(ctx, p)).join("")}</div></section>` : "";
+  const blocks = homeBlocksFor(ctx);
+  const data = await Promise.all(blocks.map(async (b) => {
+    if (b.type === "products") { const src = b.cfg.source; return (await listProducts(env, lang, { featured: src === "featured" || undefined, isNew: src === "new" || undefined, limit: clampInt(b.cfg.limit, 1, 24, 8) })).items; }
+    if (b.type === "news") return refs.contentNav.hasPosts[lang] ? (await listContent(env, lang, "post", { limit: clampInt(b.cfg.limit, 1, 12, 3) })).items : [];
+    if (b.type === "text") return sanitize(b.txt.body || "", { origin: env.SUPABASE_URL });
+    return null;
+  }));
+  const hero = blocks.find((b) => b.type === "hero");
   const org = { "@context": "https://schema.org", "@type": "Organization", name, url: siteUrl + "/" + lang + "/", ...(s.hotline ? { telephone: s.hotline } : {}), ...(s.contact_email ? { email: s.contact_email } : {}), ...(s.address ? { address: s.address } : {}) };
-  return renderPage(ctx, { title: null, desc: T.hero_sub, path: `/${lang}/`, alternates: { vi: "/vi/", en: "/en/" }, jsonld: [jsonLd(org)],
-    body: `<section class="hero"><h1>${esc(name)}</h1><p>${esc(T.hero_sub)}</p><p><a class="btn buy" href="${u(lang, "products")}">${esc(T.hero_cta)}</a> <a class="btn quote" href="${u(lang, "quote")}">${esc(T.hero_cta2)}</a></p></section>
-${cats.length ? `<section><h2>${esc(T.h_cats)}</h2><ul class="tiles">${cats.map((c) => `<li><a class="card tile" href="${esc(catHref(lang, c))}">${c.image_path ? `<img src="${esc(imgUrl(env, c.image_path))}" alt="" loading="lazy">` : ""}<span>${esc(c.tr[lang].name)}</span></a></li>`).join("")}</ul></section>` : ""}
-${section(T.h_featured, feat.items)}${section(T.h_new, neu.items)}
-${news.items.length ? `<section><h2>${esc(T.h_latest_news)}</h2><div class="grid">${news.items.map((r) => contentCard(ctx, "post", r)).join("")}</div></section>` : ""}
-${brands.length ? `<section><h2>${esc(T.h_brands)}</h2><ul class="brands">${brands.map((b) => `<li><a href="${esc(brandHref(lang, b))}">${b.logo_path ? `<img src="${esc(imgUrl(env, b.logo_path))}" alt="${esc(b.tr[lang].name)}" loading="lazy" height="40">` : esc(b.tr[lang].name)}</a></li>`).join("")}</ul></section>` : ""}
-<section class="b2b card"><h2>${esc(T.b2b_title)}</h2><p>${esc(T.b2b_text)}</p><p><a class="btn quote" href="${u(lang, "quote")}">${esc(T.b2b_cta)}</a></p></section>` });
+  return renderPage(ctx, { title: null, desc: hero?.txt.subtitle || T.hero_sub, path: `/${lang}/`, alternates: { vi: "/vi/", en: "/en/" }, jsonld: [jsonLd(org)],
+    body: (hero ? "" : `<h1 class="sr-only">${esc(name)}</h1>`) + blocks.map((b, i) => renderBlock(ctx, b, data[i])).join("") });
+}
+
+const clampInt = (v, min, max, d) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d; };
+const txtOf = (b, k) => (typeof b.txt[k] === "string" ? b.txt[k].trim() : "");
+const safeUrl = (u) => (u && okHref(u) ? u : null);
+
+// Khối trang chủ cấu hình trong CMS (bảng home_blocks); khối chỉ hiện ở ngôn ngữ có nội dung. Chưa cấu hình gì => bố cục mặc định.
+function homeBlocksFor(ctx) {
+  const { lang, T, refs } = ctx, name = siteName(ctx);
+  const rows = (refs.homeBlocks || []).map((r) => ({ type: r.block_type, cfg: (r.payload && r.payload.cfg) || {}, txt: (r.payload && r.payload[lang]) || null }))
+    .filter((b) => b.txt && typeof b.txt === "object" && Object.values(b.txt).some((v) => typeof v === "string" && v.trim()));
+  if (rows.length) return rows;
+  return [
+    { type: "hero", cfg: {}, txt: { title: name, subtitle: T.hero_sub, cta1_label: T.hero_cta, cta1_url: u(lang, "products"), cta2_label: T.hero_cta2, cta2_url: u(lang, "quote") } },
+    { type: "categories", cfg: {}, txt: { title: T.h_cats } },
+    { type: "products", cfg: { source: "featured", limit: 8 }, txt: { title: T.h_featured } },
+    { type: "products", cfg: { source: "new", limit: 8 }, txt: { title: T.h_new } },
+    { type: "news", cfg: { limit: 3 }, txt: { title: T.h_latest_news } },
+    { type: "brands", cfg: {}, txt: { title: T.h_brands } },
+    { type: "cta", cfg: {}, txt: { title: T.b2b_title, text: T.b2b_text, button_label: T.b2b_cta, button_url: u(lang, "quote") } }
+  ];
+}
+
+function renderBlock(ctx, b, data) {
+  const { env, lang, refs } = ctx, title = txtOf(b, "title"), h2 = title ? `<h2>${esc(title)}</h2>` : "";
+  if (b.type === "hero") {
+    const img = b.cfg.image_path ? `<img class="hero-img" src="${esc(imgUrl(env, b.cfg.image_path))}" alt="" fetchpriority="high">` : "";
+    const btn = (n, cls) => { const l = txtOf(b, `cta${n}_label`), url = safeUrl(txtOf(b, `cta${n}_url`)); return l && url ? `<a class="btn ${cls}" href="${esc(url)}">${esc(l)}</a> ` : ""; };
+    return `<section class="hero${img ? " has-img" : ""}"><div><h1>${esc(title)}</h1>${txtOf(b, "subtitle") ? `<p>${esc(txtOf(b, "subtitle"))}</p>` : ""}<p>${btn(1, "buy")}${btn(2, "quote")}</p></div>${img}</section>`;
+  }
+  if (b.type === "categories") {
+    const cats = catAvail(ctx).filter((c) => !c.parent_id); if (!cats.length) return "";
+    return `<section>${h2}<ul class="tiles">${cats.map((c) => `<li><a class="card tile" href="${esc(catHref(lang, c))}">${c.image_path ? `<img src="${esc(imgUrl(env, c.image_path))}" alt="" loading="lazy">` : ""}<span>${esc(c.tr[lang].name)}</span></a></li>`).join("")}</ul></section>`;
+  }
+  if (b.type === "products") return data && data.length ? `<section>${h2}<div class="grid">${data.map((p) => productCard(ctx, p)).join("")}</div></section>` : "";
+  if (b.type === "news") return data && data.length ? `<section>${h2}<div class="grid">${data.map((r) => contentCard(ctx, "post", r)).join("")}</div></section>` : "";
+  if (b.type === "brands") {
+    const brands = refs.brands.filter((x) => x.tr[lang]); if (!brands.length) return "";
+    return `<section>${h2}<ul class="brands">${brands.map((x) => `<li><a href="${esc(brandHref(lang, x))}">${x.logo_path ? `<img src="${esc(imgUrl(env, x.logo_path))}" alt="${esc(x.tr[lang].name)}" loading="lazy" height="40">` : esc(x.tr[lang].name)}</a></li>`).join("")}</ul></section>`;
+  }
+  if (b.type === "cta") {
+    const l = txtOf(b, "button_label"), url = safeUrl(txtOf(b, "button_url"));
+    return `<section class="b2b card">${h2}${txtOf(b, "text") ? `<p>${esc(txtOf(b, "text"))}</p>` : ""}${l && url ? `<p><a class="btn quote" href="${esc(url)}">${esc(l)}</a></p>` : ""}</section>`;
+  }
+  if (b.type === "text") return data ? `<section>${h2}<div class="rich">${data}</div></section>` : "";
+  if (b.type === "banner") {
+    if (!b.cfg.image_path) return "";
+    const url = safeUrl(txtOf(b, "url")), im = `<img src="${esc(imgUrl(env, b.cfg.image_path))}" alt="${esc(txtOf(b, "alt"))}" loading="lazy">`;
+    return `<section class="banner">${url ? `<a href="${esc(url)}">${im}</a>` : im}</section>`;
+  }
+  return "";
 }
 
 export async function productList(ctx, { catSlug, brandSlug }) {

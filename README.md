@@ -26,8 +26,13 @@ Kiểm tra giao diện mới chỉ bằng client Supabase GIẢ (bắt lỗi JS 
 - Công khai: `/vi/{slug}/` (trang, vd /vi/gioi-thieu/), `/vi/tin-tuc/` (+ chuyên mục `/chuyen-muc/{slug}/`), `/vi/dich-vu/`, `/vi/chinh-sach/` và tương ứng `/en/…`. Menu/chân trang tự hiện khi có nội dung; trang chủ hiện 3 tin mới; sitemap + hreflang + JSON-LD Article.
 - CMS: nhóm "Nội dung" — soạn bằng trình soạn thảo trực quan tự làm, ảnh đại diện, hẹn giờ, SEO riêng từng ngôn ngữ, trạng thái bản dịch (dịch máy không tự xuất bản), chuyên mục tin.
 - An toàn: HTML được lọc theo allowlist ở 3 lớp (khi nạp vào trình soạn thảo, khi dán/lưu, và `src/sanitize.js` khi hiển thị công khai). Slug trang không được trùng đường dẫn hệ thống (trigger trong DB; thêm đường dẫn hệ thống mới => sửa `_reserved_slugs()` trong 006).
-- Chưa làm: FAQ, đối tác, chứng nhận, dự án, tuyển dụng (DB đã có loại nội dung, chưa có trang công khai/CMS); quản lý menu & khối trang chủ.
+- Chưa làm: FAQ, đối tác, chứng nhận, dự án, tuyển dụng (DB đã có loại nội dung, chưa có trang công khai/CMS).
 - Kiểm thử: `npm test` (DB, gồm nội dung); bộ lọc HTML: `npx wrangler@4 dev -c tests/wrangler.test.jsonc` rồi POST HTML vào http://127.0.0.1:8787/; `tests/mock-postgrest.mjs` là máy chủ GIẢ chỉ để thử đường vẽ trang khi DB chưa có dữ liệu.
+
+## Menu & khối trang chủ (cần chạy thêm `db/migrations/007_menus_blocks_guard.sql`)
+- CMS nhóm "Nội dung": **Menu** (đầu trang/chân trang, tối đa 2 cấp, đổi thứ tự ↑↓, chọn nhanh liên kết tới trang/danh mục/nội dung có sẵn) và **Khối trang chủ** (Hero, Danh mục, Sản phẩm [nổi bật/mới/mới nhất], Thương hiệu, Tin mới, CTA, Nội dung tự do, Banner; bật/tắt, đổi thứ tự, nội dung riêng từng ngôn ngữ).
+- Công khai: chưa tạo menu/khối → website giữ menu và bố cục MẶC ĐỊNH như trước. Có menu/khối → dùng cấu hình. Mục/khối thiếu nội dung ở một ngôn ngữ thì ẩn ở ngôn ngữ đó (ngôn ngữ chưa có khối nào dùng bố cục mặc định).
+- An toàn: DB chặn liên kết nguy hiểm (chỉ /nội-bộ, #neo, http(s)://, mailto:, tel:), menu > 2 cấp, loại khối lạ; Worker kiểm tra liên kết thêm một lần khi hiển thị; HTML khối "Nội dung tự do" được lọc như bài viết.
 
 ## Chưa làm / giới hạn đã biết
 - Trang công khai CHƯA kiểm thử với sản phẩm thật (DB chưa có sản phẩm) và API ghi (checkout/báo giá/liên hệ) CHƯA kiểm thử đầu-cuối trên Supabase thật.
