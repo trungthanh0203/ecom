@@ -25,6 +25,10 @@ const MSG = [
   [/menus_url_safe/, "Liên kết không hợp lệ: chỉ nhận /đường-dẫn-nội-bộ, #neo, http(s)://, mailto: hoặc tel: (tối đa 500 ký tự)."],
   [/menus_label_len/, "Nhãn menu phải từ 1 đến 100 ký tự."],
   [/home_blocks_payload_ck/, "Nội dung khối quá dài (tối đa khoảng 30.000 ký tự)."],
+  [/SELF_CHANGE/, "Không thể tự đổi vai trò hoặc tự khoá chính mình."],
+  [/LAST_SUPER_ADMIN/, "Không thể hạ hoặc khoá Super Admin cuối cùng."],
+  [/INVALID_NAME/, "Tên hiển thị phải từ 1 đến 80 ký tự."],
+  [/staff_display_name_len/, "Tên hiển thị tối đa 80 ký tự."],
   [/REDIRECT_LOOP/, "Chuyển hướng này tạo thành vòng lặp với một chuyển hướng khác."],
   [/redirects_from_path_key/, "Đường dẫn cũ này đã có chuyển hướng."],
   [/redirects_not_self/, "Đường dẫn cũ và đích không được giống nhau."],
@@ -116,6 +120,7 @@ async function afterLogin() {
     await loadRefs();
     $("#boot").hidden = true; $("#login").hidden = true; $("#app").hidden = false;
     buildNav(); route();
+    if (window.CMS.onLogin) window.CMS.onLogin(user);
   } catch (e) { showLogin(errMsg(e)); console.error(e); }
 }
 async function loadRefs() {

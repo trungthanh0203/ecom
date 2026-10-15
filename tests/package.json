@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node run.mjs && node content.test.mjs",
-    "test:live": "node live.mjs"
+    "test": "node run.mjs && node content.test.mjs && node staff.test.mjs",
+    "test:live": "node live.mjs",
+    "test:live-admin": "node live-admin.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.2.17",

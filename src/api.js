@@ -1,17 +1,11 @@
 import { rpc, rest, DbError, getRefs } from "./db.js";
 import { jsonRes, truthy } from "./util.js";
 import { suggest } from "./catalog.js";
+import { limited } from "./limit.js";
+import { handleAdmin } from "./admin.js";
 
 // Giới hạn tần suất theo isolate (best-effort, KHÔNG chia sẻ giữa các isolate/vùng).
 // Lớp chống lạm dụng thật: Turnstile + (khuyến nghị) quy tắc Rate Limiting/WAF của Cloudflare + khoá idempotency trong DB.
-const buckets = new Map();
-function limited(ip, route, max, windowMs) {
-  const now = Date.now(), k = `${route}|${ip}`; let b = buckets.get(k);
-  if (!b || now > b.reset) { b = { n: 0, reset: now + windowMs }; buckets.set(k, b); }
-  b.n++;
-  if (buckets.size > 5000) for (const [kk, v] of buckets) if (now > v.reset) buckets.delete(kk);
-  return b.n > max;
-}
 const LIMITS = { "/api/cart/price": [120, 60000], "/api/checkout": [10, 600000], "/api/quote": [10, 600000], "/api/contact": [5, 600000], "/api/order-lookup": [20, 600000] };
 const str = (v, n = 1000) => (typeof v === "string" ? v.slice(0, n) : undefined);
 const opt = (v, n) => { const s = str(v, n); return s && s.trim() ? s : undefined; };
@@ -46,6 +40,7 @@ async function health(env) {
 
 export async function handleApi(request, env, url) {
   const path = url.pathname.replace(/\/$/, ""), ip = request.headers.get("cf-connecting-ip") || "unknown";
+  if (path.startsWith("/api/admin/")) return handleAdmin(request, env, url, ip);
   if (request.method === "GET" && path === "/api/suggest") {
     if (limited(ip, path, 60, 60000)) return fail("RATE", 429);
     const lang = url.searchParams.get("lang") === "en" ? "en" : "vi", q = url.searchParams.get("q") || "";

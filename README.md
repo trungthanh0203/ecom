@@ -45,6 +45,14 @@ Kiểm tra giao diện mới chỉ bằng client Supabase GIẢ (bắt lỗi JS 
 - CMS nhóm "Giới thiệu doanh nghiệp": mỗi loại chỉ hiện đúng các trường cần thiết; FAQ/đối tác/chứng nhận không có trang riêng nên slug tự tạo (giữ nguyên khi sửa). Ứng tuyển bằng email (mailto) — CHƯA có form nộp CV/tải CV lên.
 - Trường riêng lưu ở cột `content_items.meta` (khoá theo loại, kiểm định ở trigger DB: url chỉ https, email, năm, ngày, hình thức việc làm). Worker tự bỏ cột `meta` nếu 009 chưa chạy nên website không sập khi triển khai trước khi chạy SQL.
 
+## Quản lý nhân sự (cần chạy thêm `db/migrations/010_staff_management.sql`)
+- CMS nhóm "Hệ thống": **Nhân sự** (chỉ Super Admin: danh sách + email + đăng nhập gần nhất, thêm nhân viên, đổi vai trò, khoá/mở khoá, đặt lại mật khẩu, bảng quyền theo vai trò — chỉ xem), **Nhật ký thao tác** (Admin trở lên; lọc theo đối tượng/người/ngày, xuất CSV), nút **Tài khoản** (mọi nhân viên: đổi tên, đổi mật khẩu).
+- Tạo tài khoản bằng **mật khẩu tạm hiện MỘT lần** (không gửi email); nhân viên bị bắt đổi mật khẩu ở lần đăng nhập đầu (hộp thoại không đóng được). Email đã có trong hệ thống đăng nhập thì chỉ cấp vai trò. Không có chức năng xoá tài khoản (khoá để giữ lịch sử).
+- API `/api/admin/*` (src/admin.js) dùng khoá `service_role` nên: xác thực token của người gọi với Supabase Auth, chỉ nhận Super Admin đang hoạt động, chặn Origin lạ, giới hạn tần suất, ghi nhật ký kèm người thực hiện, không bao giờ ghi mật khẩu vào log/nhật ký.
+- Database: không tự đổi vai trò/khoá chính mình, không hạ Super Admin cuối cùng, tên ≤ 80 ký tự; `update_my_profile`, `staff_directory_all`, `log_admin_action` (chỉ service_role).
+- Kiểm thử: `npm test` (DB), `admin-api.test.mjs` với `mock-supabase-admin.mjs` (API Worker, máy chủ GIẢ), `npm run test:live-admin` (HỆ THỐNG THẬT — bạn tự chạy, cần SA_EMAIL/SA_PASS/WORKER_URL trong `tests/.env.test`).
+- Giới hạn: bắt buộc đổi mật khẩu tạm là ở giao diện (không có cơ chế chặn ở máy chủ); chưa có 2FA, chưa có email mời, chưa sửa được ma trận quyền trên giao diện (sửa bằng SQL).
+
 ## Chưa làm / giới hạn đã biết
 - Trang công khai CHƯA kiểm thử với sản phẩm thật (DB chưa có sản phẩm) và API ghi (checkout/báo giá/liên hệ) CHƯA kiểm thử đầu-cuối trên Supabase thật.
 - Chưa có: trang nội dung (giới thiệu, tin tức, dịch vụ, chính sách), lọc theo thuộc tính kỹ thuật, sắp xếp theo tên, GA4/GTM, email thông báo, cache trang.
