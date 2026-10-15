@@ -1,12 +1,14 @@
 export const PATHS = {
-  vi: { products: "san-pham", category: "danh-muc", brand: "thuong-hieu", cart: "gio-hang", checkout: "thanh-toan", confirm: "dat-hang-thanh-cong", quote: "bao-gia-so-luong-lon", quoteDone: "da-gui", contact: "lien-he", news: "tin-tuc", services: "dich-vu", policies: "chinh-sach", postCat: "chuyen-muc" },
-  en: { products: "products", category: "category", brand: "brand", cart: "cart", checkout: "checkout", confirm: "order-confirmation", quote: "request-quote", quoteDone: "sent", contact: "contact", news: "news", services: "services", policies: "policies", postCat: "topic" }
+  vi: { products: "san-pham", category: "danh-muc", brand: "thuong-hieu", cart: "gio-hang", checkout: "thanh-toan", confirm: "dat-hang-thanh-cong", quote: "bao-gia-so-luong-lon", quoteDone: "da-gui", contact: "lien-he", news: "tin-tuc", services: "dich-vu", policies: "chinh-sach", postCat: "chuyen-muc", faq: "hoi-dap", partners: "doi-tac", certs: "chung-nhan", projects: "du-an", careers: "tuyen-dung" },
+  en: { products: "products", category: "category", brand: "brand", cart: "cart", checkout: "checkout", confirm: "order-confirmation", quote: "request-quote", quoteDone: "sent", contact: "contact", news: "news", services: "services", policies: "policies", postCat: "topic", faq: "faq", partners: "partners", certs: "certifications", projects: "projects", careers: "careers" }
 };
 export const u = (lang, key, ...rest) => "/" + [lang, PATHS[lang][key], ...rest].filter(Boolean).join("/") + "/";
 export const productUrl = (lang, slug) => u(lang, "products", slug);
 
 const D = {
   vi: {
+    faq_title: "Hỏi đáp thường gặp", partners_title: "Đối tác & thương hiệu", certs_title: "Chứng nhận & giấy phép", projects_title: "Dự án & khách hàng tiêu biểu", careers_title: "Tuyển dụng", issuer: "Đơn vị cấp", year: "Năm", client: "Khách hàng", location: "Địa điểm", job_type: "Hình thức", salary: "Mức lương", deadline: "Hạn nộp hồ sơ", apply: "Ứng tuyển", apply_text: "Gửi hồ sơ/CV về email:", visit_site: "Truy cập website", view_cert: "Xem chứng nhận", expired: "Đã hết hạn nhận hồ sơ", more_info: "Thông tin thêm", jt_full_time: "Toàn thời gian", jt_part_time: "Bán thời gian", jt_contract: "Hợp đồng", jt_intern: "Thực tập", jt_freelance: "Cộng tác viên",
+    consent_text: "Website dùng cookie phân tích (Google Analytics/Tag Manager) để cải thiện trải nghiệm. Bạn có đồng ý không?", consent_accept: "Chấp nhận", consent_decline: "Từ chối", cookie_settings: "Cài đặt cookie",
     nav_news: "Tin tức", nav_services: "Dịch vụ", h_latest_news: "Tin tức mới", read_more: "Xem chi tiết", news_title: "Tin tức & kiến thức", services_title: "Dịch vụ", policies_title: "Chính sách", all_topics: "Tất cả chuyên mục", posted_on: "Đăng ngày", empty_content: "Chưa có nội dung.", company: "Công ty", cta_contact: "Liên hệ tư vấn", by: "Tác giả",
     nav_products: "Sản phẩm", nav_quote: "Báo giá SLL", nav_contact: "Liên hệ", search_ph: "Tìm sản phẩm, mã SKU…", search: "Tìm", cart: "Giỏ hàng", home: "Trang chủ", skip: "Bỏ qua điều hướng",
     hero_sub: "Xe điện chính hãng — giá bán lẻ công khai, báo giá riêng cho đơn mua số lượng lớn.", hero_cta: "Xem sản phẩm", hero_cta2: "Yêu cầu báo giá SLL",
@@ -36,6 +38,8 @@ const D = {
     err_ORIGIN: "Yêu cầu bị từ chối.", err_INVALID_ITEM: "Giỏ hàng có dữ liệu không hợp lệ."
   },
   en: {
+    faq_title: "Frequently asked questions", partners_title: "Partners & brands", certs_title: "Certifications & licenses", projects_title: "Projects & clients", careers_title: "Careers", issuer: "Issued by", year: "Year", client: "Client", location: "Location", job_type: "Type", salary: "Salary", deadline: "Apply by", apply: "Apply", apply_text: "Send your CV to:", visit_site: "Visit website", view_cert: "View certificate", expired: "Applications are closed", more_info: "More", jt_full_time: "Full-time", jt_part_time: "Part-time", jt_contract: "Contract", jt_intern: "Internship", jt_freelance: "Freelance",
+    consent_text: "This website uses analytics cookies (Google Analytics/Tag Manager) to improve your experience. Do you agree?", consent_accept: "Accept", consent_decline: "Decline", cookie_settings: "Cookie settings",
     nav_news: "News", nav_services: "Services", h_latest_news: "Latest news", read_more: "Read more", news_title: "News & insights", services_title: "Services", policies_title: "Policies", all_topics: "All topics", posted_on: "Posted on", empty_content: "No content yet.", company: "Company", cta_contact: "Contact us", by: "By",
     nav_products: "Products", nav_quote: "Bulk quote", nav_contact: "Contact", search_ph: "Search products, SKU…", search: "Search", cart: "Cart", home: "Home", skip: "Skip navigation",
     hero_sub: "Genuine electric vehicles — public retail prices, tailored quotes for bulk orders.", hero_cta: "Browse products", hero_cta2: "Request a bulk quote",
@@ -66,6 +70,8 @@ const D = {
   }
 };
 export const tr = (lang) => D[lang] || D.vi;
-const KEY = { post: "news", service: "services", policy: "policies" };
+const KEY = { post: "news", service: "services", policy: "policies", faq: "faq", partner: "partners", certification: "certs", project: "projects", career: "careers" };
+export const HAS_DETAIL = new Set(["post", "service", "policy", "project", "career"]);
+export const LIST_ONLY_KINDS = ["faq", "partner", "certification", "project", "career"];
 export const listUrl = (lang, kind) => u(lang, KEY[kind]);
 export const contentUrl = (lang, kind, slug) => (kind === "page" ? `/${lang}/${slug}/` : u(lang, KEY[kind], slug));

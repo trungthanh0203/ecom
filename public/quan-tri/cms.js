@@ -25,6 +25,13 @@ const MSG = [
   [/menus_url_safe/, "Liên kết không hợp lệ: chỉ nhận /đường-dẫn-nội-bộ, #neo, http(s)://, mailto: hoặc tel: (tối đa 500 ký tự)."],
   [/menus_label_len/, "Nhãn menu phải từ 1 đến 100 ký tự."],
   [/home_blocks_payload_ck/, "Nội dung khối quá dài (tối đa khoảng 30.000 ký tự)."],
+  [/REDIRECT_LOOP/, "Chuyển hướng này tạo thành vòng lặp với một chuyển hướng khác."],
+  [/redirects_from_path_key/, "Đường dẫn cũ này đã có chuyển hướng."],
+  [/redirects_not_self/, "Đường dẫn cũ và đích không được giống nhau."],
+  [/redirects_from_clean/, "Đường dẫn cũ không được chứa dấu ?, # hoặc khoảng trắng."],
+  [/redirects_to_safe/, "Đích phải là /đường-dẫn-nội-bộ hoặc https://… (không khoảng trắng)."],
+  [/INVALID_SETTING/, "Giá trị cài đặt không đúng định dạng (mã GA4/GTM, tên miền https, đường dẫn ảnh hoặc độ dài). Kiểm tra lại các ô vừa nhập."],
+  [/INVALID_META/, "Một thông tin riêng chưa hợp lệ (liên kết phải bắt đầu bằng https://, email đúng định dạng, năm 1900–2100, ngày hợp lệ, hình thức việc làm có trong danh sách)."],
   [/RESERVED_SLUG/, "Slug này trùng đường dẫn hệ thống (vd: san-pham, lien-he, tin-tuc…). Hãy chọn slug khác."],
   [/shipping_rules_province_uq/, "Đã có quy tắc vận chuyển cho tỉnh/thành này."],
   [/INVALID_(ORDER|PAYMENT|SHIPPING|QUOTE)_TRANSITION/, "Không thể chuyển sang trạng thái này từ trạng thái hiện tại."],
@@ -135,7 +142,7 @@ function buildNav() {
   const ext = Object.values(EXT).filter((d) => !d.perm || can(d.perm));
   const a = (k, t) => `<a href="#/${k}" data-k="${k}">${esc(t)}</a>`;
   const grp = (g, title) => { const l = ext.filter((d) => (d.group || (d.after ? "system" : "ops")) === g).map((d) => a(d.key, d.title)).join(""); return l ? `<div class="sep">${title}</div>${l}` : ""; };
-  $("#nav").innerHTML = a("dashboard", "Tổng quan") + grp("ops", "Vận hành") + grp("content", "Nội dung") + '<div class="sep">Catalogue</div>'
+  $("#nav").innerHTML = a("dashboard", "Tổng quan") + grp("ops", "Vận hành") + grp("content", "Nội dung") + grp("company", "Giới thiệu doanh nghiệp") + grp("seo", "SEO & theo dõi") + '<div class="sep">Catalogue</div>'
     + ROUTES.filter(([k]) => k !== "dashboard").map(([k, t]) => a(k, t)).join("") + grp("system", "Hệ thống");
 }
 let routeTok = 0;
@@ -383,6 +390,7 @@ async function viewProductEdit(arg) {
       if (trs.length) {
         const { error } = await sb.from("product_translations").upsert(trs.map((t) => ({ ...t, product_id: P.id })), { onConflict: "product_id,lang" });
         if (error) { history.replaceState(null, "", "#/products/" + P.id); throw error; }
+        if (window.CMS.afterSlugChange) await window.CMS.afterSlugChange("product", TR, trs, P.status === "published");   // đổi slug => tự tạo chuyển hướng 301
       }
       // 3) trạng thái
       if (desired !== P.status) {

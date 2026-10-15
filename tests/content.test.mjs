@@ -7,16 +7,17 @@ const here = dirname(fileURLToPath(import.meta.url)), read = (p) => readFileSync
 const db = new PGlite();
 let pass = 0, fail = 0; const fails = [];
 async function test(n, f) { try { await f(); pass++; console.log('  ✔', n); } catch (e) { fail++; fails.push(n); console.log('  ✘', n, '->', e.message); } }
+const truthy = (v, m = 'not truthy') => { if (!v) throw new Error(m); };
 const eq = (a, b, m = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m} expected ${JSON.stringify(b)} got ${JSON.stringify(a)}`); };
 async function throws(fn, re) { let e; try { await fn(); } catch (x) { e = x; } if (!e) throw new Error('expected error ' + re); if (re && !re.test(e.message)) throw new Error('error mismatch: ' + e.message); }
 const q = async (s, p) => (await db.query(s, p)).rows;
 async function as(role, uid, fn) { await db.exec(`set role ${role}`); await db.query("select set_config('request.jwt.claim.sub',$1,false)", [uid || '']); try { return await fn(); } finally { await db.exec('reset role'); await db.query("select set_config('request.jwt.claim.sub','',false)"); } }
 
 await db.exec(read('auth_stub.sql'));
-for (const f of ['001_core.sql', '002_security.sql', '003_commerce.sql', '005_staff_directory.sql', '006_content_guard.sql', '007_menus_blocks_guard.sql']) await db.exec(read(`../db/migrations/${f}`));
+for (const f of ['001_core.sql', '002_security.sql', '003_commerce.sql', '005_staff_directory.sql', '006_content_guard.sql', '007_menus_blocks_guard.sql', '008_seo_tracking_guard.sql', '009_company_content.sql']) await db.exec(read(`../db/migrations/${f}`));
 await db.exec(read('../db/seed_core.sql'));
-const U = { ed: '00000000-0000-0000-0000-000000000003', con: '00000000-0000-0000-0000-000000000004', sales: '00000000-0000-0000-0000-000000000005' };
-for (const [k, r] of [['ed', 'editor'], ['con', 'contributor'], ['sales', 'sales']]) { await q('insert into auth.users(id) values ($1)', [U[k]]); await q('insert into staff(user_id, role) values ($1,$2)', [U[k], r]); }
+const U = { adm: '00000000-0000-0000-0000-000000000002', ed: '00000000-0000-0000-0000-000000000003', con: '00000000-0000-0000-0000-000000000004', sales: '00000000-0000-0000-0000-000000000005' };
+for (const [k, r] of [['adm', 'admin'], ['ed', 'editor'], ['con', 'contributor'], ['sales', 'sales']]) { await q('insert into auth.users(id) values ($1)', [U[k]]); await q('insert into staff(user_id, role) values ($1,$2)', [U[k], r]); }
 
 async function mk(kind, slug, { status = 'published', publish_at = null, trStatus = 'published' } = {}) {
   const [i] = await q('insert into content_items(kind, status, publish_at) values ($1,$2,$3) returning id', [kind, status, publish_at]);
@@ -127,6 +128,99 @@ await test('khối trang chủ: chỉ nhận loại hợp lệ + payload là obj
 await test('nhật ký thao tác ghi lại thay đổi menu', async () => {
   const before = (await q("select count(*)::int c from audit_logs where entity='menus'"))[0].c; await mn({ label: 'Audit' });
   eq((await q("select count(*)::int c from audit_logs where entity='menus'"))[0].c, before + 1);
+});
+
+console.log('\n[5] Chuyển hướng, cài đặt SEO & theo dõi');
+const rd = (from, to, code = 301, active = true) => q('insert into redirects(from_path, to_path, status_code, active) values ($1,$2,$3,$4) returning id', [from, to, code, active]).then((r) => r[0].id);
+const st = (key, value) => q("insert into site_settings(key, value, is_public) values ($1, $2::jsonb, true) on conflict (key) do update set value = excluded.value", [key, JSON.stringify(value)]);
+await test('chuyển hướng: đích nguy hiểm / nguồn có query / tự chuyển hướng bị chặn; hợp lệ được nhận', async () => {
+  for (const bad of ['javascript:alert(1)', 'http://insecure.com', '//evil.com', 'data:text/html,x', 'vi/khong-gach', 'https://x.com/a b']) await throws(() => rd('/vi/cu-' + Math.random(), bad), /redirects_to_safe/);
+  await throws(() => rd('/vi/a?x=1', '/vi/b/'), /redirects_from_clean/);
+  await throws(() => rd('/vi/a#neo', '/vi/b/'), /redirects_from_clean/);
+  await throws(() => rd('/vi/same/', '/vi/same/'), /redirects_not_self|REDIRECT_LOOP/);
+  await throws(() => rd('/vi/x', '/vi/y/', 302 + 100), /status_code/);
+  await rd('/vi/san-pham/cu/', '/vi/san-pham/moi/'); await rd('/vi/cu2/', 'https://example.com/moi'); await rd('/vi/cu3/', '/', 302);
+});
+await test('chuyển hướng: phát hiện vòng lặp (2 và 3 mắt xích); chuỗi hợp lệ được nhận', async () => {
+  await rd('/loop/a/', '/loop/b/'); await throws(() => rd('/loop/b/', '/loop/a/'), /REDIRECT_LOOP/);
+  await rd('/chain/a/', '/chain/b/'); await rd('/chain/b/', '/chain/c/'); await throws(() => rd('/chain/c/', '/chain/a/'), /REDIRECT_LOOP/);
+  await rd('/ok/1/', '/ok/2/'); await rd('/ok/2/', '/ok/3/');
+  await rd('/off/a/', '/off/b/', 301, false); await rd('/off/b/', '/off/a/');     // chuyển hướng đã tắt không tính vào vòng lặp
+});
+await test('chuyển hướng: anon chỉ thấy bản đang bật; Editor ghi được; Contributor/Sales thì không', async () => {
+  eq((await pub("select id from redirects where from_path='/off/a/'")).length, 0);
+  truthy((await pub("select id from redirects where from_path='/vi/san-pham/cu/'")).length === 1);
+  await as('authenticated', U.ed, () => q("insert into redirects(from_path, to_path) values ('/ed/1/','/ed/2/')"));
+  await throws(() => as('authenticated', U.con, () => q("insert into redirects(from_path, to_path) values ('/c/1/','/c/2/')")), /row-level security/);
+  await throws(() => as('authenticated', U.sales, () => q("insert into redirects(from_path, to_path) values ('/s/1/','/s/2/')")), /row-level security/);
+});
+await test('cài đặt theo dõi: ga4_id / gtm_id / consent chỉ nhận đúng định dạng', async () => {
+  for (const [k, bad] of [['ga4_id', 'UA-12345-1'], ['ga4_id', 'G-abc'], ['ga4_id', 'G-ABC123"><script>'], ['gtm_id', 'GTM-<script>'], ['gtm_id', 'gtm-abcd12'], ['gtm_id', 'GTM-AB'], ['tracking_consent', 'maybe']]) await throws(() => st(k, bad), /INVALID_SETTING/);
+  await throws(() => st('ga4_id', 123), /INVALID_SETTING/);
+  await st('ga4_id', 'G-ABC123XYZ9'); await st('gtm_id', 'GTM-ABCD12'); await st('tracking_consent', 'required'); await st('tracking_consent', 'none');
+});
+await test('cài đặt CSP mở rộng: chỉ nhận danh sách https://host[:port]; chặn ; \' " và http', async () => {
+  for (const bad of ['http://x.com', "https://x.com; script-src *", 'https://x.com\' unsafe-inline', 'https://', '*', 'https://a.com https://', 'x'.repeat(501)]) await throws(() => st('csp_script_extra', bad), /INVALID_SETTING/);
+  await st('csp_script_extra', 'https://a.example.com https://b.example.com:8443'); await st('csp_connect_extra', 'https://*.example.com');
+});
+await test('cài đặt SEO: xác minh, mạng xã hội, đường dẫn ảnh, noindex, độ dài', async () => {
+  await throws(() => st('seo_verification_google', 'ab'), /INVALID_SETTING/); await throws(() => st('seo_verification_google', 'abc"><script>x</script>'), /INVALID_SETTING/);
+  await st('seo_verification_google', 'AbCdEfGhIjK_12-34');
+  await throws(() => st('social_facebook', 'javascript:alert(1)'), /INVALID_SETTING/); await throws(() => st('social_facebook', 'http://facebook.com/x'), /INVALID_SETTING/);
+  await st('social_facebook', 'https://facebook.com/congty');
+  await throws(() => st('brand_logo_path', '../etc/passwd'), /INVALID_SETTING/); await throws(() => st('brand_logo_path', 'site/a b.webp'), /INVALID_SETTING/); await st('brand_logo_path', 'site/logo.webp');
+  await throws(() => st('seo_noindex', 'true'), /INVALID_SETTING/); await st('seo_noindex', true); await st('seo_noindex', false);
+  await throws(() => st('seo_home_title_vi', 'x'.repeat(201)), /INVALID_SETTING/); await st('seo_home_title_vi', 'Xe điện chính hãng');
+  await st('khoa_khac_khong_bi_anh_huong', { a: 1 });
+});
+await test('quyền cài đặt: Editor chỉ ghi được seo_*/social_*; mã theo dõi cần Admin; Contributor/Sales không ghi được', async () => {
+  const ins = (uid, k, v) => as('authenticated', uid, () => q("insert into site_settings(key, value, is_public) values ($1,$2::jsonb,true) on conflict (key) do update set value=excluded.value returning key", [k, JSON.stringify(v)]));
+  await ins(U.ed, 'seo_title_suffix', 'Cty Thử'); await ins(U.ed, 'social_zalo', 'https://zalo.me/0900000000'); await ins(U.ed, 'seo_noindex', true);
+  for (const k of ['ga4_id', 'gtm_id', 'csp_script_extra', 'tracking_consent', 'company_name']) await throws(() => ins(U.ed, k, k === 'ga4_id' ? 'G-ABC123XYZ9' : k === 'gtm_id' ? 'GTM-ABCD12' : k === 'tracking_consent' ? 'none' : k === 'csp_script_extra' ? 'https://a.example.com' : 'X'), /row-level security/);
+  await ins(U.adm, 'ga4_id', 'G-ZZZ999AAA1'); await ins(U.adm, 'gtm_id', 'GTM-WXYZ99');
+  await throws(() => ins(U.con, 'seo_title_suffix', 'x'), /row-level security/); await throws(() => ins(U.sales, 'seo_title_suffix', 'x'), /row-level security/);
+  eq((await as('authenticated', U.ed, () => q("delete from site_settings where key='company_name' returning key"))).length, 0);
+  eq((await as('authenticated', U.ed, () => q("delete from site_settings where key='social_zalo' returning key"))).length, 1);
+});
+await test('anon chỉ đọc được cài đặt công khai (mã GA4/GTM là công khai theo thiết kế, không lộ khoá bí mật nào)', async () => {
+  const keys = (await pub('select key from site_settings')).map((r) => r.key); truthy(keys.includes('ga4_id') && keys.includes('seo_title_suffix'));
+  eq((await pub("select 1 from information_schema.columns where table_name='site_settings' and column_name='secret'")).length, 0);
+});
+
+console.log('\n[6] FAQ / đối tác / chứng nhận / dự án / tuyển dụng');
+const mkc = (kind, meta, over = {}) => q("insert into content_items(kind, status, meta) values ($1,$2,$3::jsonb) returning id", [kind, over.status || 'published', JSON.stringify(meta || {})]).then((r) => r[0].id);
+await test('meta hợp lệ theo từng loại được nhận', async () => {
+  await mkc('faq', {}); await mkc('partner', { url: 'https://doitac.vn' }); await mkc('certification', { issuer: 'ISO', year: 2024, url: 'https://iso.org/x' });
+  await mkc('project', { client: 'Cty A', year: 2025 }); await mkc('career', { location: 'Hà Nội', type: 'full_time', deadline: '2026-12-31', salary: 'Thoả thuận', apply_email: 'hr@cty.vn' });
+});
+await test('meta: khoá lạ / sai loại / sai định dạng bị chặn (url http, javascript:, email, năm, ngày, loại việc)', async () => {
+  const bad = [['faq', { url: 'https://x.com' }], ['partner', { color: 'red' }], ['partner', { url: 'http://x.com' }], ['partner', { url: 'javascript:alert(1)' }], ['partner', { url: 'https://x.com/a b' }],
+    ['certification', { year: '2024' }], ['certification', { year: 1800 }], ['certification', { year: 2024.5 }], ['project', { client: '' }], ['project', { client: 'x'.repeat(201) }],
+    ['career', { deadline: '31/12/2026' }], ['career', { deadline: '2026-13-45' }], ['career', { type: 'forever' }], ['career', { apply_email: 'not-an-email' }], ['career', { apply_email: 'a@b' }], ['career', { location: 5 }]];
+  for (const [k, m] of bad) await throws(() => mkc(k, m), /INVALID_META/);
+  await throws(() => q("insert into content_items(kind, meta) values ('partner', '[1]'::jsonb)"), /INVALID_META|content_items_meta_object/);
+  await throws(() => mkc('partner', { url: 'https://x.com/' + 'a'.repeat(4100) }), /content_items_meta_object|INVALID_META/);
+});
+await test('đổi meta hoặc đổi loại cũng được kiểm lại', async () => {
+  const id = await mkc('partner', { url: 'https://ok.vn' });
+  await throws(() => q("update content_items set meta = '{\"url\":\"javascript:x\"}'::jsonb where id=$1", [id]), /INVALID_META/);
+  await throws(() => q("update content_items set kind='faq' where id=$1", [id]), /INVALID_META/);
+});
+await test('đường dẫn dành riêng mới: trang không được trùng hoi-dap, doi-tac, chung-nhan, du-an, tuyen-dung…', async () => {
+  for (const s of ['hoi-dap', 'faq', 'doi-tac', 'partners', 'chung-nhan', 'certifications', 'du-an', 'projects', 'tuyen-dung', 'careers']) await throws(() => mk('page', s), /RESERVED_SLUG/);
+});
+await test('content_presence: anon chỉ thấy (ngôn ngữ, loại) đã xuất bản và đến giờ', async () => {
+  const pub1 = await mkc('faq', {}); await q("insert into content_translations(item_id, lang, slug, title, status) values ($1,'vi','faq-1','Câu hỏi 1','published'),($1,'en','faq-1-en','Question 1','draft')", [pub1]);
+  const dr = await mkc('partner', {}, { status: 'draft' }); await q("insert into content_translations(item_id, lang, slug, title, status) values ($1,'vi','dt-nhap','Đối tác nháp','published')", [dr]);
+  const rows = await pub('select lang, kind from content_presence() where kind in (\'faq\',\'partner\') order by kind, lang');
+  eq(rows, [{ lang: 'vi', kind: 'faq' }]);
+  eq((await as('authenticated', U.ed, () => q("select lang, kind from content_presence() where kind in ('faq','partner') order by kind, lang"))).length >= 1, true);
+});
+await test('quyền: Contributor chỉ lưu nháp FAQ/dự án/tuyển dụng; Editor xuất bản; Sales không ghi', async () => {
+  await as('authenticated', U.con, () => q("insert into content_items(kind, status, meta) values ('career','draft','{\"location\":\"HN\"}'::jsonb)"));
+  await throws(() => as('authenticated', U.con, () => q("insert into content_items(kind, status) values ('faq','published')")), /row-level security/);
+  await as('authenticated', U.ed, () => q("insert into content_items(kind, status, meta) values ('project','published','{\"year\":2026}'::jsonb)"));
+  await throws(() => as('authenticated', U.sales, () => q("insert into content_items(kind) values ('partner')")), /row-level security/);
 });
 
 console.log(`\n==== ${pass} đạt, ${fail} lỗi ====`);

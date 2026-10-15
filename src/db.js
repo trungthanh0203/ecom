@@ -22,7 +22,7 @@ let REFS = null, REFS_AT = 0;
 export async function getRefs(env) {
   if (REFS && Date.now() - REFS_AT < 60000) return REFS;
   const langs = (env.LANGS || "vi,en").split(",").map((x) => x.trim());
-  const [c, b, s, sh, nav, pc, mn, hb, ...posts] = await Promise.all([
+  const [c, b, s, sh, nav, pc, mn, hb, pres, ...posts] = await Promise.all([
     rest(env, "categories?select=id,parent_id,sort,image_path,category_translations(lang,slug,name,description,seo_title,seo_description)&order=sort.asc,id.asc"),
     rest(env, "brands?select=id,sort,logo_path,website,brand_translations(lang,slug,name,description)&order=sort.asc,id.asc"),
     rest(env, "site_settings?select=key,value"),
@@ -31,6 +31,7 @@ export async function getRefs(env) {
     rest(env, "post_categories?select=id,sort,post_category_translations(lang,slug,name)&order=sort.asc,id.asc"),
     rest(env, "menus?select=id,location,parent_id,sort,label_vi,label_en,url_vi,url_en&order=sort.asc,id.asc"),
     rest(env, "home_blocks?select=id,block_type,sort,payload&order=sort.asc,id.asc"),
+    rest(env, "rpc/content_presence", { method: "POST", body: {} }).catch(() => null),   // 009 chưa chạy => null, vẫn hoạt động
     ...langs.map((l) => rest(env, `content_translations?select=slug,content_items!inner(kind)&lang=eq.${l}&content_items.kind=eq.post&limit=1`))
   ]);
   const settings = Object.fromEntries(s.data.map((r) => [r.key, r.value]));
@@ -38,7 +39,8 @@ export async function getRefs(env) {
   const brands = b.data.map((x) => ({ ...x, tr: Object.fromEntries((x.brand_translations || []).map((t) => [t.lang, t])) }));
   const postCats = pc.data.map((x) => ({ ...x, tr: Object.fromEntries((x.post_category_translations || []).map((t) => [t.lang, t])) }));
   const byKind = (k) => nav.data.filter((r) => r.content_items.kind === k).map((r) => ({ lang: r.lang, slug: r.slug, title: r.title }));
-  const contentNav = { pages: byKind("page"), policies: byKind("policy"), services: byKind("service"), hasPosts: Object.fromEntries(langs.map((l, i) => [l, posts[i].data.length > 0])) };
+  const has = {}; for (const r of (pres?.data || [])) { (has[r.kind] = has[r.kind] || {})[r.lang] = true; }
+  const contentNav = { has, pages: byKind("page"), policies: byKind("policy"), services: byKind("service"), hasPosts: Object.fromEntries(langs.map((l, i) => [l, posts[i].data.length > 0])) };
   REFS = { cats, brands, settings, shipping: sh.data, postCats, contentNav, menus: mn.data, homeBlocks: hb.data }; REFS_AT = Date.now();
   return REFS;
 }

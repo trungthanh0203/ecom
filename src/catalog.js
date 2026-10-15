@@ -1,4 +1,4 @@
-import { rest } from "./db.js";
+import { rest, DbError } from "./db.js";
 import { qsSafe } from "./util.js";
 
 const PSEL = "id,sku,price,sale_price,sale_start,sale_end,retail_enabled,featured,is_new,unit,category_id,brand_id,product_translations!inner(lang,slug,name,short_desc),product_images(path,is_primary,sort,alt_vi,alt_en)";
@@ -50,22 +50,32 @@ export async function suggest(env, lang, q) {
   return items.map((x) => ({ id: x.id, sku: x.sku, name: x.product_translations[0].name }));
 }
 
-// ---- Nội dung (trang / tin tức / dịch vụ / chính sách) ----
-const CSEL = "item_id,lang,slug,title,excerpt,content_items!inner(kind,cover_path,author_name,post_category_id,created_at,publish_at,sort)";
-export async function listContent(env, lang, kind, { catId, page = 1, limit = 12 } = {}) {
-  const p = new URLSearchParams({ select: CSEL, lang: `eq.${lang}`, "content_items.kind": `eq.${kind}`, limit: String(limit), offset: String((page - 1) * limit) });
-  if (catId) p.set("content_items.post_category_id", `eq.${Number(catId)}`);
-  p.set("order", kind === "post" ? "content_items(created_at).desc" : "content_items(sort).asc");
-  const { data, total } = await rest(env, `content_translations?${p}`, { count: true });
-  return { items: data, total: total ?? data.length };
+// ---- Nội dung (trang / tin tức / dịch vụ / chính sách / FAQ / đối tác / chứng nhận / dự án / tuyển dụng) ----
+// Cột `meta` thuộc migration 009; nếu chưa chạy thì tự bỏ cột này và vẫn hoạt động.
+let NO_META = false;
+async function withMeta(fn) {
+  try { return await fn(NO_META); }
+  catch (e) { if (!NO_META && e instanceof DbError && e.status === 400 && /meta/i.test(JSON.stringify(e.body || ""))) { NO_META = true; return fn(true); } throw e; }
+}
+const citems = (noMeta, extra = "") => `kind,cover_path,author_name,post_category_id,created_at,publish_at,sort${noMeta ? "" : ",meta"}${extra}`;
+export async function listContent(env, lang, kind, { catId, page = 1, limit = 12, full = false } = {}) {
+  return withMeta(async (noMeta) => {
+    const p = new URLSearchParams({ select: `item_id,lang,slug,title,excerpt${full ? ",body" : ""},content_items!inner(${citems(noMeta)})`, lang: `eq.${lang}`, "content_items.kind": `eq.${kind}`, limit: String(limit), offset: String((page - 1) * limit) });
+    if (catId) p.set("content_items.post_category_id", `eq.${Number(catId)}`);
+    p.set("order", kind === "post" ? "content_items(created_at).desc" : "content_items(sort).asc");
+    const { data, total } = await rest(env, `content_translations?${p}`, { count: true });
+    return { items: data, total: total ?? data.length };
+  });
 }
 export async function getContent(env, lang, kind, slug) {
-  const p = new URLSearchParams({
-    select: "item_id,lang,slug,title,excerpt,body,seo_title,seo_description,content_items!inner(kind,cover_path,author_name,post_category_id,created_at,publish_at)",
-    lang: `eq.${lang}`, slug: `eq.${slug}`, "content_items.kind": `eq.${kind}`, limit: "1"
+  return withMeta(async (noMeta) => {
+    const p = new URLSearchParams({
+      select: `item_id,lang,slug,title,excerpt,body,seo_title,seo_description,content_items!inner(${citems(noMeta)})`,
+      lang: `eq.${lang}`, slug: `eq.${slug}`, "content_items.kind": `eq.${kind}`, limit: "1"
+    });
+    const { data } = await rest(env, `content_translations?${p}`);
+    const row = data[0]; if (!row) return null;
+    const alts = await rest(env, `content_translations?select=lang,slug&item_id=eq.${row.item_id}`);
+    return { t: row, item: row.content_items, alts: Object.fromEntries(alts.data.map((a) => [a.lang, a.slug])) };
   });
-  const { data } = await rest(env, `content_translations?${p}`);
-  const row = data[0]; if (!row) return null;
-  const alts = await rest(env, `content_translations?select=lang,slug&item_id=eq.${row.item_id}`);
-  return { t: row, item: row.content_items, alts: Object.fromEntries(alts.data.map((a) => [a.lang, a.slug])) };
 }

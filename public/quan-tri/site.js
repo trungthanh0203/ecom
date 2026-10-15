@@ -25,19 +25,19 @@ async function uploadImg(file, prefix, max) {
 const rmImg = (path) => (path ? db().storage.from("media").remove([path]).catch(() => {}) : null);
 
 // ================= MENU =================
-const NAMES = { vi: { home: "Trang chủ", products: "Sản phẩm", quote: "Báo giá SLL", contact: "Liên hệ", news: "Tin tức", services: "Dịch vụ", policies: "Chính sách" }, en: { home: "Home", products: "Products", quote: "Bulk quote", contact: "Contact", news: "News", services: "Services", policies: "Policies" } };
-const SEG = { vi: { products: "san-pham", quote: "bao-gia-so-luong-lon", contact: "lien-he", news: "tin-tuc", services: "dich-vu", policies: "chinh-sach", cat: "danh-muc" }, en: { products: "products", quote: "request-quote", contact: "contact", news: "news", services: "services", policies: "policies", cat: "category" } };
-const KINDSEG = (l, kind, slug) => (kind === "page" ? `/${l}/${slug}/` : `/${l}/${SEG[l][{ post: "news", service: "services", policy: "policies" }[kind]]}/${slug}/`);
+const NAMES = { vi: { home: "Trang chủ", products: "Sản phẩm", quote: "Báo giá SLL", contact: "Liên hệ", news: "Tin tức", services: "Dịch vụ", policies: "Chính sách", faq: "Hỏi đáp", partners: "Đối tác", certs: "Chứng nhận", projects: "Dự án", careers: "Tuyển dụng" }, en: { home: "Home", products: "Products", quote: "Bulk quote", contact: "Contact", news: "News", services: "Services", policies: "Policies" } };
+const SEG = { vi: { products: "san-pham", quote: "bao-gia-so-luong-lon", contact: "lien-he", news: "tin-tuc", services: "dich-vu", policies: "chinh-sach", faq: "hoi-dap", partners: "doi-tac", certs: "chung-nhan", projects: "du-an", careers: "tuyen-dung", cat: "danh-muc" }, en: { faq: "faq", partners: "partners", certs: "certifications", projects: "projects", careers: "careers", products: "products", quote: "request-quote", contact: "contact", news: "news", services: "services", policies: "policies", cat: "category" } };
+const KINDSEG = (l, kind, slug) => (kind === "page" ? `/${l}/${slug}/` : `/${l}/${SEG[l][{ post: "news", service: "services", policy: "policies", project: "projects", career: "careers" }[kind]]}/${slug}/`);
 let QL = null;
 async function quickLinks() {   // gợi ý liên kết: trang hệ thống, danh mục, nội dung đã có
   if (QL) return QL;
   const out = { vi: [], en: [] };
   for (const l of LANGS) {
-    out[l].push([NAMES[l].home, `/${l}/`], ...["products", "quote", "contact", "news", "services", "policies"].map((k) => [NAMES[l][k], `/${l}/${SEG[l][k]}/`]));
+    out[l].push([NAMES[l].home, `/${l}/`], ...["products", "quote", "contact", "news", "services", "policies", "faq", "partners", "certs", "projects", "careers"].map((k) => [NAMES[l][k], `/${l}/${SEG[l][k]}/`]));
     for (const c of S.cats) { const t = (c.category_translations || []).find((x) => x.lang === l && x.status === "published"); if (t) out[l].push([`Danh mục: ${t.name}`, `/${l}/${SEG[l].products}/${SEG[l].cat}/${t.slug}/`]); }
   }
   const r = await db().from("content_translations").select("lang,slug,title,content_items!inner(kind)").eq("status", "published").limit(500);
-  if (!r.error) for (const x of r.data) if (out[x.lang]) out[x.lang].push([`${{ page: "Trang", post: "Tin", service: "Dịch vụ", policy: "Chính sách" }[x.content_items.kind]}: ${x.title}`, KINDSEG(x.lang, x.content_items.kind, x.slug)]);
+  if (!r.error) for (const x of r.data) if (out[x.lang] && ["page", "post", "service", "policy", "project", "career"].includes(x.content_items.kind)) out[x.lang].push([`${{ page: "Trang", post: "Tin", service: "Dịch vụ", policy: "Chính sách", project: "Dự án", career: "Tuyển dụng" }[x.content_items.kind]}: ${x.title}`, KINDSEG(x.lang, x.content_items.kind, x.slug)]);
   return (QL = out);
 }
 

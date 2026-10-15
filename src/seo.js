@@ -1,8 +1,9 @@
 import { rest, getRefs } from "./db.js";
-import { u, productUrl, PATHS, contentUrl, listUrl } from "./i18n.js";
+import { u, productUrl, PATHS, contentUrl, listUrl, HAS_DETAIL } from "./i18n.js";
 import { esc } from "./util.js";
 
-export function robots(siteUrl) {
+export function robots(siteUrl, noindex) {
+  if (noindex) return "User-agent: *\nDisallow: /\n";
   return ["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /quan-tri/",
     "Disallow: /vi/gio-hang/", "Disallow: /en/cart/", "Disallow: /vi/thanh-toan/", "Disallow: /en/checkout/",
     "Disallow: /vi/dat-hang-thanh-cong/", "Disallow: /en/order-confirmation/", `Sitemap: ${siteUrl}/sitemap.xml`, ""].join("\n");
@@ -32,8 +33,7 @@ export async function sitemap(env, siteUrl) {
   const byItem = new Map(), present = new Map();
   for (const t of ct) {
     const k = t.content_items.kind;
-    if (!byItem.has(t.item_id)) byItem.set(t.item_id, {});
-    byItem.get(t.item_id)[t.lang] = contentUrl(t.lang, k, t.slug);
+    if (k === "page" || HAS_DETAIL.has(k)) { if (!byItem.has(t.item_id)) byItem.set(t.item_id, {}); byItem.get(t.item_id)[t.lang] = contentUrl(t.lang, k, t.slug); }
     if (!present.has(k)) present.set(k, {});
     present.get(k)[t.lang] = listUrl(t.lang, k === "page" ? "post" : k);
   }

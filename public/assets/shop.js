@@ -9,6 +9,42 @@ const fmt = (n) => new Intl.NumberFormat("vi-VN").format(n) + " ₫";
 const ST = { vi: { new: "Mới tiếp nhận", confirmed: "Đã xác nhận", preparing: "Đang chuẩn bị hàng", shipping: "Đang giao hàng", completed: "Hoàn thành", cancelled: "Đã huỷ", returned: "Hoàn trả", unpaid: "Chưa thanh toán", pending_verification: "Chờ xác minh", paid: "Đã thanh toán", failed: "Thất bại", refunded: "Đã hoàn tiền" },
   en: { new: "Received", confirmed: "Confirmed", preparing: "Preparing", shipping: "Shipping", completed: "Completed", cancelled: "Cancelled", returned: "Returned", unpaid: "Unpaid", pending_verification: "Pending verification", paid: "Paid", failed: "Failed", refunded: "Refunded" } }[LANG] || {};
 
+// ---- theo dõi GA4 / GTM: chỉ chạy khi đã cấu hình VÀ khách đã đồng ý (nếu website bật yêu cầu đồng ý). KHÔNG gửi dữ liệu cá nhân (không tên, SĐT, email, địa chỉ). ----
+const TRK = J.track || {}, trackOn = () => !!(TRK.ga4 || TRK.gtm);
+const getConsent = () => { try { return localStorage.getItem("consent_v1"); } catch { return null; } };
+const setConsent = (v) => { try { localStorage.setItem("consent_v1", v); } catch { /* bỏ qua */ } };
+const allowed = () => trackOn() && (TRK.consent === "none" || getConsent() === "granted");
+let trkLoaded = false;
+function loadTracking() {
+  if (trkLoaded || !allowed()) return;
+  trkLoaded = true; window.dataLayer = window.dataLayer || [];
+  const inject = (src) => { const el = document.createElement("script"); el.async = true; el.src = src; document.head.appendChild(el); };
+  if (TRK.gtm) { window.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" }); inject("https://www.googletagmanager.com/gtm.js?id=" + encodeURIComponent(TRK.gtm)); }
+  else if (TRK.ga4) { window.gtag = function () { window.dataLayer.push(arguments); }; window.gtag("js", new Date()); window.gtag("config", TRK.ga4); inject("https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(TRK.ga4)); }
+}
+function track(name, params) {
+  if (!allowed() || !trkLoaded) return;
+  if (TRK.gtm) { if (params && params.items) window.dataLayer.push({ ecommerce: null }); window.dataLayer.push({ event: name, ...(params && params.items ? { ecommerce: params } : params || {}) }); }
+  else if (TRK.ga4 && window.gtag) window.gtag("event", name, params || {});
+}
+const itemOf = (x) => ({ item_id: x.sku, item_name: x.name, price: Number(x.price), quantity: x.qty || 1 });
+const okItems = (q) => q.items.filter((i) => !i.problem).map((i) => itemOf({ sku: i.sku, name: i.name, price: i.unit_price, qty: i.qty }));
+let viewed = false;
+function pageEvents() {
+  if (viewed || !allowed()) return;
+  const el = document.getElementById("ev-item"); if (!el) return;
+  try { const it = JSON.parse(el.textContent); viewed = true; track("view_item", { currency: it.currency || "VND", value: it.price, items: [{ item_id: it.item_id, item_name: it.item_name, price: it.price, quantity: 1 }] }); } catch { /* bỏ qua */ }
+}
+loadTracking();
+const banner = $("#consent");
+if (banner && trackOn() && TRK.consent === "required" && getConsent() === null) banner.hidden = false;
+document.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-consent]");
+  if (c) { const prev = getConsent(); setConsent(c.dataset.consent); if (banner) banner.hidden = true; if (c.dataset.consent === "granted") { loadTracking(); pageEvents(); } else if (prev === "granted") location.reload(); }
+  if (e.target.closest("[data-cookie-settings]") && banner) banner.hidden = false;
+});
+const once = (k) => { try { if (sessionStorage.getItem(k)) return false; sessionStorage.setItem(k, "1"); } catch { /* không có sessionStorage: cho phép */ } return true; };
+
 // ---- giỏ hàng ----
 const CK = "cart_v1"; let mem = [];
 const valid = (c) => Array.isArray(c) ? c.filter((x) => Number.isInteger(x.product_id) && Number.isInteger(x.qty) && x.qty >= 1 && x.qty <= 999) : [];
@@ -24,6 +60,7 @@ document.addEventListener("click", (e) => {
     const q = Math.min(999, Math.max(1, parseInt(qi?.value || "1", 10) || 1)), c = getCart(), ex = c.find((x) => x.product_id === id);
     if (ex) ex.qty = Math.min(999, ex.qty + q); else c.push({ product_id: id, qty: q });
     setCart(c); toast(T.added);
+    const pr = Number(add.dataset.price); if (add.dataset.sku && Number.isFinite(pr)) track("add_to_cart", { currency: "VND", value: pr * q, items: [{ item_id: add.dataset.sku, item_name: add.dataset.name, price: pr, quantity: q }] });
   }
   const th = e.target.closest("[data-thumb]");
   if (th) { e.preventDefault(); const m = $("#main-img"); if (m) { m.src = th.href; m.alt = $("img", th)?.alt || m.alt; } }
@@ -45,12 +82,14 @@ function summary(q, withShip) {
 const probText = (p) => T["problem_" + p] || p;
 
 // ---- trang giỏ hàng ----
+let viewCart = false, began = false;
 async function renderCart(root) {
   const cart = getCart();
   if (!cart.length) { root.innerHTML = `<p>${esc(T.cart_empty)}</p><p><a class="btn" href="${J.urls.products}">${esc(T.continue)}</a></p>`; return; }
   const r = await post("/api/cart/price", { items: cart, lang: LANG });
   if (r.status !== 200) { root.innerHTML = `<p class="error">${esc(errMsg(r))}</p><p><button class="btn" id="cart-clear">${esc(T.remove)}</button></p>`; $("#cart-clear")?.addEventListener("click", () => { setCart([]); renderCart(root); }); return; }
   const q = r.data, bad = q.items.some((i) => i.problem);
+  if (!viewCart) { viewCart = true; track("view_cart", { currency: "VND", value: q.subtotal, items: okItems(q) }); }
   root.innerHTML = `<div class="table-wrap"><table class="cart"><thead><tr><th>${esc(T.item)}</th><th>${esc(T.unit_price)}</th><th>${esc(T.qty)}</th><th>${esc(T.line_total)}</th><th></th></tr></thead><tbody>
   ${q.items.map((i) => `<tr><td>${esc(i.name || "#" + i.product_id)}<br><small class="muted">${esc(i.sku || "")}</small>${i.problem ? `<br><small class="error">${esc(probText(i.problem))}</small>` : ""}</td>
   <td>${i.problem ? "—" : fmt(i.unit_price)}</td><td><input type="number" min="1" max="999" value="${i.qty}" data-qty="${i.product_id}" aria-label="${esc(T.qty)}"></td>
@@ -94,6 +133,7 @@ if (ckForm) {
     const r = await post("/api/cart/price", { items: cart, lang: LANG, province: ckForm.province.value });
     if (r.status !== 200) { box.innerHTML = `<p class="error">${esc(errMsg(r))}</p>`; return; }
     const q = r.data, bad = q.items.some((i) => i.problem);
+    if (!began && !bad) { began = true; track("begin_checkout", { currency: "VND", value: q.subtotal, items: okItems(q) }); }
     box.innerHTML = `<ul class="lines">${q.items.map((i) => `<li>${esc(i.name || "#" + i.product_id)} × ${i.qty} — ${i.problem ? `<span class="error">${esc(probText(i.problem))}</span>` : fmt(i.line_total)}</li>`).join("")}</ul>${summary(q, true)}${bad ? `<p><a href="${J.urls.cart}">${esc(T.cart_title)}</a></p>` : ""}`;
     $("button[type=submit]", ckForm).disabled = bad || !$$('[name="payment_method"]', ckForm).length;
   }
@@ -112,6 +152,7 @@ if (cfRoot) (async () => {
   const r = await post("/api/order-lookup", o);
   if (r.status !== 200) { cfRoot.innerHTML = `<p>${esc(T.cf_none)}</p>`; return; }
   const d = r.data;
+  if (once("ev_purchase_" + d.code)) track("purchase", { transaction_id: d.code, currency: "VND", value: d.total, tax: d.vat_amount, shipping: d.shipping_fee, items: (d.items || []).map((i) => itemOf({ sku: i.sku, name: i.name, price: i.unit_price, qty: i.qty })) });
   cfRoot.innerHTML = `<p>${esc(T.cf_code)}: <strong class="code">${esc(d.code)}</strong><br><small class="muted">${esc(T.cf_keep)}</small></p>
   <p>${esc(T.cf_status)}: ${esc(ST[d.status] || d.status)} · ${esc(T.cf_pay_status)}: ${esc(ST[d.payment_status] || d.payment_status)}</p>
   <ul class="lines">${(d.items || []).map((i) => `<li>${esc(i.name)} (${esc(i.sku)}) × ${i.qty} — ${fmt(i.line_total)}</li>`).join("")}</ul>${summary({ subtotal: d.subtotal, vat_rate: d.vat_rate, vat_amount: d.vat_amount, shipping_fee: d.shipping_fee, total: d.total }, true).replace(/<p class="muted">.*<\/p>/, "")}`;
@@ -137,12 +178,12 @@ if (qForm) {
     items: $$(".qrow", rows).map((r) => { const n = $('[name="item_name"]', r), pid = n.dataset.pid; return { product_id: pid ? Number(pid) : undefined, name: n.value.trim(), qty: Number($('[name="item_qty"]', r).value), unit: $('[name="item_unit"]', r).value || undefined }; }) }),
   (data) => { try { sessionStorage.setItem("last_quote", data.code || ""); } catch { /* bỏ qua */ } location.href = J.urls.quoteDone; });
 }
-const qc = $("#quote-code"); if (qc) { let c = ""; try { c = sessionStorage.getItem("last_quote") || ""; } catch { /* bỏ qua */ } qc.textContent = c || "—"; }
+const qc = $("#quote-code"); if (qc) { let c = ""; try { c = sessionStorage.getItem("last_quote") || ""; } catch { /* bỏ qua */ } qc.textContent = c || "—"; if (c && once("ev_quote_" + c)) track("generate_lead", { lead_type: "quote" }); }
 
 // ---- liên hệ ----
 const cForm = $("#contact-form");
 if (cForm) bindForm(cForm, "/api/contact", "contact", (fd) => ({ name: fd.get("name"), phone: fd.get("phone") || undefined, email: fd.get("email") || undefined, message: fd.get("message") }),
-  () => { cForm.reset(); const m = $("#form-msg", cForm); m.className = "ok"; m.textContent = T.ct_ok; m.hidden = false; });
+  () => { cForm.reset(); const m = $("#form-msg", cForm); m.className = "ok"; m.textContent = T.ct_ok; m.hidden = false; track("generate_lead", { lead_type: "contact" }); });
 
-badge();
+badge(); pageEvents();
 })();

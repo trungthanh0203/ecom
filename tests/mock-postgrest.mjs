@@ -7,9 +7,17 @@ const items = {
   "gioi-thieu": { kind: "page", title: "Giới thiệu", id: 1, body: BAD },
   "bai-1": { kind: "post", title: "Bài viết đầu <b>tiên</b>", id: 2, body: "<p>Nội dung bài viết</p>", cat: 1, author: "Ban biên tập" },
   "dich-vu-a": { kind: "service", title: "Dịch vụ A", id: 3, body: "<p>Mô tả dịch vụ</p>" },
-  "chinh-sach-bao-mat": { kind: "policy", title: "Chính sách bảo mật", id: 4, body: "<p>Quy định</p>" }
+  "chinh-sach-bao-mat": { kind: "policy", title: "Chính sách bảo mật", id: 4, body: "<p>Quy định</p>" },
+  "giao-hang-bao-lau": { kind: "faq", title: "Giao hàng mất bao lâu?", id: 11, body: BAD },
+  "bao-hanh-the-nao": { kind: "faq", title: "Bảo hành thế nào?", id: 12, body: "<p>12 tháng</p>" },
+  "doi-tac-a": { kind: "partner", title: "Đối tác A", id: 13, cover: "partners/a.webp", meta: { url: "https://doitac.vn" } },
+  "doi-tac-b": { kind: "partner", title: "Đối tác B", id: 14, meta: { url: "javascript:evil()" } },
+  "iso-9001": { kind: "certification", title: "ISO 9001", id: 15, cover: "content/iso.webp", meta: { issuer: "BSI", year: 2024, url: "https://bsi.com/x" } },
+  "du-an-x": { kind: "project", title: "Dự án X", id: 16, body: "<p>Triển khai</p>", meta: { client: "Cty ABC", year: 2025, url: "https://abc.vn" } },
+  "nv-kinh-doanh": { kind: "career", title: "Nhân viên kinh doanh", id: 17, body: "<p>Mô tả công việc</p>", meta: { location: "Hà Nội", type: "full_time", deadline: "2099-12-31", salary: "Thoả thuận", apply_email: "hr@cty.vn" } },
+  "vi-tri-het-han": { kind: "career", title: "Vị trí đã hết hạn", id: 18, body: "<p>Cũ</p>", meta: { location: "HCM", type: "intern", deadline: "2020-01-01", apply_email: "hr@cty.vn" } }
 };
-const ci = (it) => ({ kind: it.kind, cover_path: null, author_name: it.author || null, post_category_id: it.cat || null, created_at: "2026-10-01T00:00:00Z", publish_at: null, sort: 0 });
+const ci = (it) => ({ kind: it.kind, meta: it.meta || {}, cover_path: it.cover || null, author_name: it.author || null, post_category_id: it.cat || null, created_at: "2026-10-01T00:00:00Z", publish_at: null, sort: 0 });
 const row = (slug, it, full) => ({ item_id: it.id, lang: "vi", slug, title: it.title, excerpt: "Tóm tắt " + slug, ...(full ? { body: it.body, seo_title: null, seo_description: null } : {}), content_items: ci(it) });
 http.createServer((req, res) => {
   const u = new URL(req.url, "http://x"), table = u.pathname.split("/").pop(), q = u.searchParams, sel = q.get("select") || "";
@@ -21,9 +29,15 @@ http.createServer((req, res) => {
     else if (sel.startsWith("lang,slug,title,content_items")) data = Object.entries(items).filter(([, v]) => v.kind !== "post").map(([s, v]) => ({ lang: "vi", slug: s, title: v.title, content_items: { kind: v.kind, sort: 0 } }));
     else if (sel.startsWith("slug,content_items")) data = (q.get("lang") === "eq.vi") ? [{ slug: "bai-1", content_items: { kind: "post" } }] : [];
     else if (sel.startsWith("item_id,lang,slug,content_items")) data = Object.entries(items).map(([s, v]) => ({ item_id: v.id, lang: "vi", slug: s, content_items: { kind: v.kind } }));
-    else data = Object.entries(items).filter(([, v]) => v.kind === kind).map(([s, v]) => row(s, v, false));
-  } else if (table === "post_categories") data = [{ id: 1, sort: 0, post_category_translations: [{ lang: "vi", slug: "tin-cong-ty", name: "Tin công ty" }] }];
-  else if (table === "site_settings") data = [{ key: "company_name", value: "Cty Mock" }];
+    else data = Object.entries(items).filter(([, v]) => v.kind === kind).map(([s, v]) => row(s, v, sel.includes("body")));
+  } else if (table === "content_presence") data = ["faq", "partner", "certification", "project", "career"].map((k) => ({ lang: "vi", kind: k }));
+  else if (table === "post_categories") data = [{ id: 1, sort: 0, post_category_translations: [{ lang: "vi", slug: "tin-cong-ty", name: "Tin công ty" }] }];
+  else if (table === "site_settings") data = [{ key: "company_name", value: "Cty Mock" }, ...JSON.parse(process.env.SETTINGS || "[]")];
+  else if (table === "redirects") { const m = (q.get("from_path") || "").match(/"[^"]+"/g) || []; const want = m.map((x) => x.slice(1, -1)); data = JSON.parse(process.env.REDIRECTS || "[]").filter((r) => want.includes(r.from_path)); }
+  else if (table === "product_translations" && q.get("slug") === "eq.xe-demo") data = [{ product_id: 1, lang: "vi", slug: "xe-demo", name: "Xe <demo>", short_desc: "Mô tả ngắn", description: "Mô tả", features: null, shipping_info: null, seo_title: null, seo_description: null,
+    products: { id: 1, sku: "XM-1", price: 10000000, sale_price: null, sale_start: null, sale_end: null, retail_enabled: true, unit: "chiếc", package_info: null, category_id: null, brand_id: null, attrs: {}, product_images: [] } }];
+  else if (table === "product_translations" && q.get("product_id")) data = [{ lang: "vi", slug: "xe-demo" }];
+  else if (table === "products") data = [{ id: 1, sku: "XM-1", price: 10000000, sale_price: null, sale_start: null, sale_end: null, retail_enabled: true, featured: true, is_new: true, unit: null, category_id: null, brand_id: null, product_translations: [{ lang: "vi", slug: "xe-demo", name: "Xe <demo>", short_desc: "x" }], product_images: [] }];
   else if (table === "menus" && process.env.MODE === "cfg") data = [
     { id: 1, location: "main", parent_id: null, sort: 0, label_vi: "Sản phẩm", label_en: "Products", url_vi: "/vi/san-pham/", url_en: "/en/products/" },
     { id: 2, location: "main", parent_id: 1, sort: 0, label_vi: "Xe máy điện", label_en: null, url_vi: "/vi/san-pham/danh-muc/xe-may-dien/", url_en: null },

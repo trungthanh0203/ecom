@@ -6,12 +6,21 @@ const C = window.CMS, { $, $$, esc, toast, busy, errMsg, openModal, closeModal, 
 const db = () => C.db();
 const LANGS = (window.APP_CONFIG && window.APP_CONFIG.LANGS) || ["vi", "en"];
 const LANG_NAME = { vi: "Tiếng Việt", en: "English" };
-const KIND = {
+const KIND_DEF = { hasSlug: true, hasExcerpt: true, hasBody: true, hasSeo: true, hasCover: true, titleLabel: "Tiêu đề *", excerptLabel: "Tóm tắt (hiện ở danh sách & SEO)", bodyLabel: "Nội dung", coverLabel: "Ảnh đại diện", meta: [] };
+const KIND = Object.fromEntries(Object.entries({
   pages: { kind: "page", title: "Trang nội dung", one: "trang" }, posts: { kind: "post", title: "Tin tức", one: "bài viết" },
-  services: { kind: "service", title: "Dịch vụ", one: "dịch vụ" }, policies: { kind: "policy", title: "Chính sách", one: "chính sách" }
-};
-const PUB = { vi: { post: "tin-tuc", service: "dich-vu", policy: "chinh-sach" }, en: { post: "news", service: "services", policy: "policies" } };
-const liveUrl = (lang, kind, slug) => (kind === "page" ? `/${lang}/${slug}/` : `/${lang}/${PUB[lang][kind]}/${slug}/`);
+  services: { kind: "service", title: "Dịch vụ", one: "dịch vụ" }, policies: { kind: "policy", title: "Chính sách", one: "chính sách" },
+  faq: { kind: "faq", title: "Hỏi đáp (FAQ)", one: "câu hỏi", group: "company", titleLabel: "Câu hỏi *", bodyLabel: "Câu trả lời", hasSlug: false, hasExcerpt: false, hasSeo: false, hasCover: false },
+  partners: { kind: "partner", title: "Đối tác", one: "đối tác", group: "company", titleLabel: "Tên đối tác *", excerptLabel: "Mô tả ngắn (tuỳ chọn)", coverLabel: "Logo đối tác", hasSlug: false, hasBody: false, hasSeo: false, meta: [["url", "Website đối tác (https://…)", "url"]] },
+  certifications: { kind: "certification", title: "Chứng nhận", one: "chứng nhận", group: "company", titleLabel: "Tên chứng nhận *", excerptLabel: "Mô tả ngắn (tuỳ chọn)", coverLabel: "Ảnh chứng nhận", hasSlug: false, hasBody: false, hasSeo: false, meta: [["issuer", "Đơn vị cấp", "text"], ["year", "Năm cấp", "year"], ["url", "Liên kết xác minh (https://…)", "url"]] },
+  projects: { kind: "project", title: "Dự án", one: "dự án", group: "company", titleLabel: "Tên dự án *", coverLabel: "Ảnh dự án", meta: [["client", "Khách hàng", "text"], ["year", "Năm thực hiện", "year"], ["url", "Website dự án (https://…)", "url"]] },
+  careers: { kind: "career", title: "Tuyển dụng", one: "vị trí tuyển dụng", group: "company", titleLabel: "Vị trí tuyển dụng *", bodyLabel: "Mô tả công việc & yêu cầu", hasCover: false, meta: [["location", "Địa điểm làm việc", "text"], ["type", "Hình thức", "job"], ["deadline", "Hạn nộp hồ sơ (sau ngày này tin tự ẩn khỏi danh sách)", "date"], ["salary", "Mức lương (tuỳ chọn)", "text"], ["apply_email", "Email nhận hồ sơ", "email"]] }
+}).map(([k, v]) => [k, { ...KIND_DEF, ...v }]));
+const JOB = [["", "— Chưa chọn —"], ["full_time", "Toàn thời gian"], ["part_time", "Bán thời gian"], ["contract", "Hợp đồng"], ["intern", "Thực tập"], ["freelance", "Cộng tác viên"]];
+const NO_DETAIL = new Set(["faq", "partner", "certification"]);   // chỉ có trang danh sách, không có trang chi tiết
+const PUB = { vi: { post: "tin-tuc", service: "dich-vu", policy: "chinh-sach", faq: "hoi-dap", partner: "doi-tac", certification: "chung-nhan", project: "du-an", career: "tuyen-dung" }, en: { post: "news", service: "services", policy: "policies", faq: "faq", partner: "partners", certification: "certifications", project: "projects", career: "careers" } };
+const liveUrl = (lang, kind, slug) => (kind === "page" ? `/${lang}/${slug}/` : NO_DETAIL.has(kind) ? `/${lang}/${PUB[lang][kind]}/` : `/${lang}/${PUB[lang][kind]}/${slug}/`);
+const randSlugSuffix = () => Math.random().toString(36).slice(2, 7);
 const CST = { draft: "Nháp", published: "Đã xuất bản", archived: "Lưu trữ" };
 const fmtDT = (iso) => (iso ? new Date(iso).toLocaleString("vi-VN") : "—");
 const toLocalInput = (iso) => { if (!iso) return ""; const d = new Date(iso), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -91,7 +100,7 @@ async function viewList(key) {
   if (f.status) q = q.eq("status", f.status);
   const { data, count, error } = await q; if (error) throw error;
   const trBadge = (r, l) => { const t = (r.content_translations || []).find((x) => x.lang === l); return t ? `<span class="badge ${t.status === "published" ? "ok" : "warn"}">${l.toUpperCase()}: ${esc(ST[t.status])}</span>` : `<span class="badge bad">${l.toUpperCase()}: thiếu</span>`; };
-  const rows = data.map((r) => { const vi = (r.content_translations || []).find((x) => x.lang === "vi"); return `<tr class="row" data-id="${r.id}"><td class="wrap"><strong>${esc(vi ? vi.title : "(chưa có tiêu đề)")}</strong><br><small class="muted">${esc(vi ? "/" + vi.slug : "")}</small></td>
+  const rows = data.map((r) => { const vi = (r.content_translations || []).find((x) => x.lang === "vi"); return `<tr class="row" data-id="${r.id}"><td class="wrap"><strong>${esc(vi ? vi.title : "(chưa có tiêu đề)")}</strong>${K.hasSlug ? `<br><small class="muted">${esc(vi ? "/" + vi.slug : "")}</small>` : ""}</td>
     <td><span class="badge ${r.status === "published" ? "ok" : ""}">${esc(CST[r.status])}</span>${r.publish_at && r.status === "published" && new Date(r.publish_at) > new Date() ? `<br><small class="muted">Hẹn: ${esc(fmtDT(r.publish_at))}</small>` : ""}</td>
     <td>${LANGS.map((l) => trBadge(r, l)).join("")}</td><td>${esc(fmtDT(r.created_at))}</td></tr>`; }).join("");
   const pages = Math.max(1, Math.ceil((count || 0) / PG));
@@ -108,26 +117,51 @@ async function viewList(key) {
 }
 
 // ---------- soạn / sửa ----------
-const TRF = [["title", "Tiêu đề *", "input"], ["slug", "Slug (đường dẫn)", "input"], ["excerpt", "Tóm tắt (hiện ở danh sách & SEO)", "ta3"], ["body", "Nội dung", "rte"], ["seo_title", "SEO title", "input"], ["seo_description", "SEO description", "ta2"]];
-function trFieldset(lang, t, canPub, kind) {
+const TRF_ALL = [["title", "title", "input"], ["slug", "slug", "input"], ["excerpt", "excerpt", "ta3"], ["body", "body", "rte"], ["seo_title", "seo", "input"], ["seo_description", "seo", "ta2"]];
+const trFieldsOf = (K) => TRF_ALL.filter(([k, grp]) => (grp === "title") || (k === "slug" ? K.hasSlug : grp === "excerpt" ? K.hasExcerpt : grp === "body" ? K.hasBody : K.hasSeo));
+const trLabel = (K, k) => ({ title: K.titleLabel, slug: "Slug (đường dẫn)", excerpt: K.excerptLabel, body: K.bodyLabel, seo_title: "SEO title", seo_description: "SEO description" }[k]);
+function trFieldset(lang, t, canPub, K) {
   t = t || {};
-  const body = TRF.map(([k, lab, type]) => type === "input" ? inp(`${lang}__${k}`, lab, t[k] || "") : type === "rte" ? `<div class="full"><span class="lbl">${esc(lab)}</span>${rteMarkup(`${lang}__${k}`, t[k])}</div>` : txa(`${lang}__${k}`, lab, t[k] || "", Number(type.slice(2)))).join("");
+  const body = trFieldsOf(K).map(([k, , type]) => { const lab = trLabel(K, k); return type === "input" ? inp(`${lang}__${k}`, lab, t[k] || "") : type === "rte" ? `<div class="full"><span class="lbl">${esc(lab)}</span>${rteMarkup(`${lang}__${k}`, t[k])}</div>` : txa(`${lang}__${k}`, lab, t[k] || "", Number(type.slice(2))); }).join("");
   return `<fieldset class="tr" data-lang="${lang}"><legend>${esc(LANG_NAME[lang] || lang)}</legend><div class="form-grid">${body}
     ${sel(`${lang}__status`, "Trạng thái bản dịch", canPub ? [["draft", "Nháp"], ["reviewed", "Đã duyệt"], ["published", "Đã xuất bản"]] : [["draft", "Nháp"]], t.status || "draft")}
     <div>${chk(`${lang}__machine_translated`, "Đây là bản dịch máy (cần người duyệt)", t.machine_translated)}</div></div>
-    ${kind === "page" ? '<p class="hint">Slug của trang nằm ngay sau /' + lang + '/ nên không được trùng đường dẫn hệ thống (san-pham, gio-hang, lien-he, tin-tuc…).</p>' : ""}
+    ${K.kind === "page" ? '<p class="hint">Slug của trang nằm ngay sau /' + lang + '/ nên không được trùng đường dẫn hệ thống (san-pham, gio-hang, lien-he, tin-tuc, hoi-dap…).</p>' : ""}
+    ${!K.hasSlug ? '<p class="hint">Mục này chỉ hiện trong trang danh sách nên không cần đường dẫn riêng (hệ thống tự tạo).</p>' : ""}
     ${lang !== "vi" ? '<p class="hint">Bản dịch máy không tự xuất bản — chỉ chuyển “Đã xuất bản” sau khi người có quyền đã đọc duyệt.</p>' : ""}</fieldset>`;
 }
-function readTr(root, lang) {
+function readTr(root, lang, K, old) {
   const o = {}; let any = false;
-  for (const [k, , type] of TRF) { const el = type === "rte" ? $(`[data-rte="${lang}__${k}"]`, root) : g(root, `${lang}__${k}`); const v = type === "rte" ? readRteSafe(el) : (el?.value || "").trim(); o[k] = v || null; if (v) any = true; }
+  for (const [k, , type] of trFieldsOf(K)) { const el = type === "rte" ? $(`[data-rte="${lang}__${k}"]`, root) : g(root, `${lang}__${k}`); const v = type === "rte" ? readRteSafe(el) : (el?.value || "").trim(); o[k] = v || null; if (v) any = true; }
   if (!any) return null;
-  if (!o.title) throw new Error(`Bản dịch ${lang.toUpperCase()}: thiếu tiêu đề.`);
-  o.slug = o.slug || slugify(o.title);
+  if (!o.title) throw new Error(`Bản dịch ${lang.toUpperCase()}: thiếu ${K.titleLabel.replace(" *", "").toLowerCase()}.`);
+  o.slug = K.hasSlug ? (o.slug || slugify(o.title)) : ((old && old.slug) || (slugify(o.title).slice(0, 50) || "muc") + "-" + randSlugSuffix());   // mục không có trang riêng: slug tự tạo, giữ nguyên khi sửa
   if (!SLUG_RE.test(o.slug)) throw new Error(`Bản dịch ${lang.toUpperCase()}: slug chỉ gồm a-z, 0-9 và dấu gạch ngang.`);
   o.status = g(root, `${lang}__status`).value; o.machine_translated = g(root, `${lang}__machine_translated`).checked; o.lang = lang; return o;
 }
 const readRteSafe = (el) => (el ? readRte(el) : "");
+function metaHtml(K, meta) {
+  return K.meta.map(([k, label, t]) => { const v = meta && meta[k] != null ? meta[k] : "", n = `meta__${k}`;
+    if (t === "job") return sel(n, label, JOB, v);
+    if (t === "year") return inp(n, label, v, 'type="number" min="1900" max="2100" step="1"');
+    if (t === "date") return inp(n, label, v, 'type="date"');
+    if (t === "email") return inp(n, label, v, 'type="email" maxlength="200"');
+    if (t === "url") return inp(n, label, v, 'type="url" maxlength="500" placeholder="https://"');
+    return inp(n, label, v, "maxlength=200"); }).join("");
+}
+function readMeta(root, K) {
+  const m = {};
+  for (const [k, label, t] of K.meta) {
+    const v = (g(root, `meta__${k}`)?.value || "").trim(), nm = label.split(" (")[0];
+    if (!v) continue;
+    if (t === "url" && !/^https:\/\/[^\s<>"']+$/.test(v)) throw new Error(`${nm}: phải bắt đầu bằng https://`);
+    if (t === "email" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) throw new Error(`${nm}: email không hợp lệ.`);
+    if (t === "year") { const n = Number(v); if (!Number.isInteger(n) || n < 1900 || n > 2100) throw new Error(`${nm}: nhập năm từ 1900 đến 2100.`); m[k] = n; continue; }
+    if (t === "date" && (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v)))) throw new Error(`${nm}: ngày không hợp lệ.`);
+    m[k] = v;
+  }
+  return m;
+}
 
 async function viewEdit(key, arg) {
   const K = KIND[key], isNew = arg === "new", canW = can("content.write"), canPub = can("content.publish");
@@ -148,23 +182,25 @@ async function viewEdit(key, arg) {
     ${sel("status", "Trạng thái", canPub ? [["draft", "Nháp"], ["published", "Đã xuất bản"], ["archived", "Lưu trữ"]] : [["draft", "Nháp"]], item.status)}
     ${inp("publish_at", "Hẹn giờ hiển thị (trống = ngay khi xuất bản)", toLocalInput(item.publish_at), 'type="datetime-local"')}${inp("sort", "Thứ tự (nhỏ hiện trước)", item.sort, 'type="number"')}
     ${K.kind === "post" ? inp("author_name", "Tác giả", item.author_name || "") + sel("post_category_id", "Chuyên mục", catOpts, item.post_category_id) : ""}
-    <div class="full"><label>Ảnh đại diện (JPG/PNG/WebP)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
-      ${item.cover_path ? `<div id="cover-cur"><img src="${esc(pubUrl(item.cover_path))}" alt="" height="80"> ${chk("cover_remove", "Gỡ ảnh đại diện", false)}</div>` : ""}</div></div>
+    ${metaHtml(K, item.meta)}
+    ${K.hasCover ? `<div class="full"><label>${esc(K.coverLabel)} (JPG/PNG/WebP)<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
+      ${item.cover_path ? `<div id="cover-cur"><img src="${esc(pubUrl(item.cover_path))}" alt="" height="80"> ${chk("cover_remove", "Gỡ ảnh", false)}</div>` : ""}</div>` : ""}</div>
     <p class="hint">Nội dung chỉ hiện trên website khi: trạng thái “Đã xuất bản”, đã đến giờ hẹn, VÀ bản dịch của ngôn ngữ đó ở trạng thái “Đã xuất bản”.</p>
     ${viPub ? `<p><a target="_blank" rel="noopener" href="${esc(liveUrl("vi", K.kind, TR.vi.slug))}">Xem trên website (VI) ↗</a></p>` : ""}</div>
-  ${LANGS.map((l) => `<div class="pane" data-pane="tr-${l}" hidden>${trFieldset(l, TR[l], canPub, K.kind)}</div>`).join("")}
+  ${LANGS.map((l) => `<div class="pane" data-pane="tr-${l}" hidden>${trFieldset(l, TR[l], canPub, K)}</div>`).join("")}
   <div class="actions">${canW ? '<button class="btn primary" type="submit" id="c-save">Lưu</button>' : '<span class="muted">Chỉ xem</span>'}${!isNew && canW ? '<button class="btn danger" type="button" id="c-del">Xoá</button>' : ""}</div></form>`;
   const root = $("#cform"); tabs(root); wireRte(root);
   if (!canW) { $$("input,select,textarea", root).forEach((x) => (x.disabled = true)); $$(".rte-body", root).forEach((x) => (x.contentEditable = "false")); $$(".rte-bar button", root).forEach((x) => (x.disabled = true)); }
   let id = isNew ? null : item.id;
   root.addEventListener("submit", (ev) => { ev.preventDefault(); busy($("#c-save"), async () => {
-    const trs = LANGS.map((l) => readTr(root, l)).filter(Boolean);
+    const trs = LANGS.map((l) => readTr(root, l, K, TR[l])).filter(Boolean);
     if (!trs.some((t) => t.lang === "vi")) throw new Error("Cần nhập ít nhất nội dung tiếng Việt (có tiêu đề).");
     const row = { status: g(root, "status").value, sort: Number(g(root, "sort").value || 0), publish_at: g(root, "publish_at").value ? new Date(g(root, "publish_at").value).toISOString() : null };
+    if (K.meta.length) row.meta = readMeta(root, K);
     if (K.kind === "post") { row.author_name = g(root, "author_name").value.trim() || null; row.post_category_id = numOrNull(g(root, "post_category_id").value); }
-    let oldCover = null, newCover = null; const file = g(root, "cover").files[0];
+    let oldCover = null, newCover = null; const file = K.hasCover ? g(root, "cover").files[0] : null;
     if (file) { const blob = await resizeImage(file), path = `content/cover-${crypto.randomUUID()}.webp`; const up = await db().storage.from("media").upload(path, blob, { contentType: "image/webp", cacheControl: "31536000" }); if (up.error) throw up.error; newCover = path; oldCover = item.cover_path || null; row.cover_path = path; }
-    else if (g(root, "cover_remove")?.checked) { oldCover = item.cover_path; row.cover_path = null; }
+    else if (K.hasCover && g(root, "cover_remove")?.checked) { oldCover = item.cover_path; row.cover_path = null; }
     try {
       if (!id) { const r = await db().from("content_items").insert({ kind: K.kind, ...row }).select("id").single(); if (r.error) throw r.error; id = r.data.id; }
       else { const r = await db().from("content_items").update(row).eq("id", id); if (r.error) throw r.error; }
@@ -172,6 +208,7 @@ async function viewEdit(key, arg) {
     if (oldCover) await db().storage.from("media").remove([oldCover]);
     const tr = await db().from("content_translations").upsert(trs.map((t) => ({ ...t, item_id: id })), { onConflict: "item_id,lang" });
     if (tr.error) { history.replaceState(null, "", `#/${key}/${id}`); throw tr.error; }
+    if (window.CMS.afterSlugChange) await window.CMS.afterSlugChange(K.kind, TR, trs, item.status === "published");   // đổi slug => tự tạo chuyển hướng 301
     const live = row.status === "published" && trs.some((t) => t.status === "published");
     toast(live ? "Đã lưu. Nội dung hiển thị trên website trong tối đa 1 phút." : row.status === "published" ? "Đã lưu — nhưng chưa hiện vì chưa có bản dịch ở trạng thái “Đã xuất bản”." : "Đã lưu.");
     if (isNew) location.hash = `#/${key}/${id}`; else C.reload();
@@ -218,6 +255,6 @@ function catModal(row, all) {
 }
 
 C.rte = { rteMarkup, wireRte, readRte, cleanHtml };
-for (const [key, K] of Object.entries(KIND)) C.register({ key, title: K.title, group: "content", view: makeView(key) });
+for (const [key, K] of Object.entries(KIND)) C.register({ key, title: K.title, group: K.group || "content", view: makeView(key) });
 C.register({ key: "postcats", title: "Chuyên mục tin", group: "content", view: viewPostCats });
 })();

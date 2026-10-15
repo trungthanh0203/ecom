@@ -22,7 +22,7 @@ export function notFound(ctx) {
 }
 
 export async function home(ctx) {
-  const { env, lang, T, refs, siteUrl } = ctx, s = refs.settings, name = siteName(ctx);
+  const { env, lang, T, refs, siteUrl, cfg } = ctx, s = refs.settings, name = siteName(ctx);
   const blocks = homeBlocksFor(ctx);
   const data = await Promise.all(blocks.map(async (b) => {
     if (b.type === "products") { const src = b.cfg.source; return (await listProducts(env, lang, { featured: src === "featured" || undefined, isNew: src === "new" || undefined, limit: clampInt(b.cfg.limit, 1, 24, 8) })).items; }
@@ -31,8 +31,9 @@ export async function home(ctx) {
     return null;
   }));
   const hero = blocks.find((b) => b.type === "hero");
-  const org = { "@context": "https://schema.org", "@type": "Organization", name, url: siteUrl + "/" + lang + "/", ...(s.hotline ? { telephone: s.hotline } : {}), ...(s.contact_email ? { email: s.contact_email } : {}), ...(s.address ? { address: s.address } : {}) };
-  return renderPage(ctx, { title: null, desc: hero?.txt.subtitle || T.hero_sub, path: `/${lang}/`, alternates: { vi: "/vi/", en: "/en/" }, jsonld: [jsonLd(org)],
+  const org = { "@context": "https://schema.org", "@type": "Organization", name, url: siteUrl + "/" + lang + "/", ...(s.hotline ? { telephone: s.hotline } : {}), ...(s.contact_email ? { email: s.contact_email } : {}), ...(s.address ? { address: s.address } : {}), ...(cfg.logo ? { logo: imgUrl(env, cfg.logo) } : {}), ...(cfg.social.length ? { sameAs: cfg.social.map(([, u2]) => u2) } : {}) };
+  const site = { "@context": "https://schema.org", "@type": "WebSite", name, url: siteUrl + "/" + lang + "/", inLanguage: lang, potentialAction: { "@type": "SearchAction", target: `${siteUrl}${u(lang, "products")}?q={search_term_string}`, "query-input": "required name=search_term_string" } };
+  return renderPage(ctx, { title: null, rawTitle: cfg.homeTitle || undefined, desc: cfg.homeDesc || hero?.txt.subtitle || T.hero_sub, path: `/${lang}/`, alternates: { vi: "/vi/", en: "/en/" }, jsonld: [jsonLd(org), jsonLd(site)],
     body: (hero ? "" : `<h1 class="sr-only">${esc(name)}</h1>`) + blocks.map((b, i) => renderBlock(ctx, b, data[i])).join("") });
 }
 
@@ -141,8 +142,9 @@ export async function productDetail(ctx, slug) {
     body: `${breadcrumbs(crumbs)}<div class="detail">${gallery}<div><h1>${esc(t.name)}</h1>
 <p class="muted">${esc(T.sku)}: <strong>${esc(p.sku)}</strong>${brand?.tr[lang] ? ` · ${esc(T.brand)}: <a href="${esc(brandHref(lang, brand))}">${esc(brand.tr[lang].name)}</a>` : ""}${cat?.tr[lang] ? ` · ${esc(T.category)}: <a href="${esc(catHref(lang, cat))}">${esc(cat.tr[lang].name)}</a>` : ""}</p>
 ${t.short_desc ? `<p>${esc(t.short_desc)}</p>` : ""}${price}
-${retail ? `<div class="buyrow"><label>${esc(T.qty)} <input type="number" id="qty" min="1" max="999" value="1" inputmode="numeric"></label><button type="button" class="btn buy" data-add="${p.id}" data-qty-input="#qty">${esc(T.add_to_cart)}</button></div>` : `<p class="muted">${pi.current == null ? "" : esc(T.not_retail)}</p>`}
+${retail ? `<div class="buyrow"><label>${esc(T.qty)} <input type="number" id="qty" min="1" max="999" value="1" inputmode="numeric"></label><button type="button" class="btn buy" data-add="${p.id}" data-qty-input="#qty" data-name="${esc(t.name)}" data-sku="${esc(p.sku)}" data-price="${pi.current}">${esc(T.add_to_cart)}</button></div>` : `<p class="muted">${pi.current == null ? "" : esc(T.not_retail)}</p>`}
 <p><a class="btn quote" href="${esc(u(lang, "quote") + "?sp=" + encodeURIComponent(p.sku))}">${esc(T.quote_btn)}</a></p></div></div>
+${pi.current != null ? `<script type="application/json" id="ev-item">${JSON.stringify({ item_id: p.sku, item_name: t.name, price: pi.current, currency: "VND" }).replace(/</g, "\\u003c")}</script>` : ""}
 <div class="tabs">${det(T.t_desc, para(t.description), true)}${det(T.t_specs, specRows.length ? `<table class="specs"><tbody>${specRows.map(([k, v]) => `<tr><th scope="row">${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>` : "", true)}${det(T.t_features, para(t.features))}${det(T.t_ship, para(t.shipping_info))}</div>
 ${related.length ? `<section><h2>${esc(T.related)}</h2><div class="grid">${related.map((x) => productCard(ctx, x)).join("")}</div></section>` : ""}` });
 }
@@ -205,42 +207,91 @@ ${field(T.ct_name, '<input name="name" autocomplete="name" required maxlength="1
 <label class="chk"><input type="checkbox" name="consent" required> ${esc(T.q_consent)}</label>${hp}${ts(ctx)}<p id="form-msg" class="error" role="alert" hidden></p><button class="btn" type="submit">${esc(T.ct_submit)}</button></form></div>` });
 }
 
-// ================= NỘI DUNG: trang / tin tức / dịch vụ / chính sách =================
-const KIND_TITLE = { post: "news_title", service: "services_title", policy: "policies_title" };
+// ================= NỘI DUNG: trang / tin tức / dịch vụ / chính sách / FAQ / đối tác / chứng nhận / dự án / tuyển dụng =================
+const KIND_TITLE = { post: "news_title", service: "services_title", policy: "policies_title", faq: "faq_title", partner: "partners_title", certification: "certs_title", project: "projects_title", career: "careers_title" };
 const fmtDate = (iso, lang) => new Date(iso).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-GB");
+const hasKind = (refs, kind, l) => (kind === "post" ? !!refs.contentNav.hasPosts[l] : kind === "service" ? refs.contentNav.services.some((x) => x.lang === l) : kind === "policy" ? refs.contentNav.policies.some((x) => x.lang === l) : !!(refs.contentNav.has && refs.contentNav.has[kind] && refs.contentNav.has[kind][l]));
+const metaOf = (it) => (it && it.meta && typeof it.meta === "object" ? it.meta : {});
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const isExpired = (m) => !!(m.deadline && m.deadline < todayStr());
+const httpsUrl = (u2) => (typeof u2 === "string" && /^https:\/\/[^\s<>"']+$/.test(u2) ? u2 : null);
+const plain = (h) => String(h || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+const dot = (arr) => arr.filter(Boolean).join(" · ");
+const ldTypes = { full_time: "FULL_TIME", part_time: "PART_TIME", contract: "CONTRACTOR", intern: "INTERN", freelance: "OTHER" };
+const jobType = (T, m) => (m.type ? T["jt_" + m.type] || "" : "");
+
 function contentCard(ctx, kind, r) {
-  const { env, lang, T } = ctx, it = r.content_items, href = contentUrl(lang, kind, r.slug);
-  return `<article class="card post">${it.cover_path ? `<a class="thumb" href="${esc(href)}"><img src="${esc(imgUrl(env, it.cover_path))}" alt="" loading="lazy" decoding="async"></a>` : ""}
-    <h3><a href="${esc(href)}">${esc(r.title)}</a></h3>${kind === "post" ? `<p class="muted">${esc(fmtDate(it.publish_at || it.created_at, lang))}</p>` : ""}${r.excerpt ? `<p>${esc(r.excerpt)}</p>` : ""}
-    <a class="btn" href="${esc(href)}">${esc(T.read_more)}</a></article>`;
+  const { env, lang, T } = ctx, it = r.content_items, m = metaOf(it), href = contentUrl(lang, kind, r.slug);
+  const thumb = it.cover_path ? `<a class="thumb" href="${esc(href)}"><img src="${esc(imgUrl(env, it.cover_path))}" alt="" loading="lazy" decoding="async"></a>` : "";
+  let sub = "";
+  if (kind === "post") sub = esc(fmtDate(it.publish_at || it.created_at, lang));
+  else if (kind === "project") sub = esc(dot([m.client, m.year]));
+  else if (kind === "career") sub = esc(dot([m.location, jobType(T, m), m.deadline ? `${T.deadline}: ${fmtDate(m.deadline, lang)}` : ""]));
+  return `<article class="card post">${thumb}<h3><a href="${esc(href)}">${esc(r.title)}</a></h3>${sub ? `<p class="muted">${sub}</p>` : ""}${r.excerpt ? `<p>${esc(r.excerpt)}</p>` : ""}<a class="btn" href="${esc(href)}">${esc(T.read_more)}</a></article>`;
 }
+
+async function listBody(ctx, kind, list) {
+  const { env, lang, T, siteUrl } = ctx;
+  if (kind === "faq") {
+    const answers = await Promise.all(list.map((r) => sanitize(r.body || "", { origin: env.SUPABASE_URL })));
+    const ld = jsonLd({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: list.map((r, i) => ({ "@type": "Question", name: r.title, acceptedAnswer: { "@type": "Answer", text: plain(answers[i]) || r.title } })) });
+    return { html: `<div class="faq">${list.map((r, i) => `<details><summary>${esc(r.title)}</summary><div class="rich">${answers[i]}</div></details>`).join("")}</div>`, ld: [ld] };
+  }
+  if (kind === "partner") {
+    return { html: `<ul class="logos">${list.map((r) => { const it = r.content_items, url = httpsUrl(metaOf(it).url), img = it.cover_path ? `<img src="${esc(imgUrl(env, it.cover_path))}" alt="${esc(r.title)}" loading="lazy">` : `<span class="logo-text">${esc(r.title)}</span>`;
+      return `<li class="card partner">${url ? `<a href="${esc(url)}" rel="noopener noreferrer" target="_blank" title="${esc(T.visit_site)}">${img}</a>` : img}<h3>${esc(r.title)}</h3>${r.excerpt ? `<p class="muted">${esc(r.excerpt)}</p>` : ""}</li>`; }).join("")}</ul>`, ld: [] };
+  }
+  if (kind === "certification") {
+    return { html: `<div class="grid">${list.map((r) => { const it = r.content_items, m = metaOf(it), url = httpsUrl(m.url);
+      return `<article class="card cert">${it.cover_path ? `<img class="certimg" src="${esc(imgUrl(env, it.cover_path))}" alt="${esc(r.title)}" loading="lazy">` : ""}<h3>${esc(r.title)}</h3>${dot([m.issuer, m.year]) ? `<p class="muted">${esc(dot([m.issuer, m.year]))}</p>` : ""}${r.excerpt ? `<p>${esc(r.excerpt)}</p>` : ""}${url ? `<p><a href="${esc(url)}" rel="noopener noreferrer" target="_blank">${esc(T.view_cert)}</a></p>` : ""}</article>`; }).join("")}</div>`, ld: [] };
+  }
+  return { html: `<div class="grid">${list.map((r) => contentCard(ctx, kind, r)).join("")}</div>`, ld: [] };
+}
+
 export async function contentList(ctx, kind, { catSlug } = {}) {
   const { env, lang, T, refs, url } = ctx, page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
   const cat = catSlug ? refs.postCats.find((c) => c.tr[lang]?.slug === catSlug) : null;
   if (catSlug && !cat) return null;
-  const { items, total } = await listContent(env, lang, kind, { catId: cat?.id, page, limit: 12 });
+  const limit = kind === "faq" ? 100 : kind === "partner" || kind === "certification" ? 60 : kind === "career" ? 24 : 12;
+  const { items, total } = await listContent(env, lang, kind, { catId: cat?.id, page, limit, full: kind === "faq" });
+  const list = kind === "career" ? items.filter((r) => !isExpired(metaOf(r.content_items))) : items;
   const base = cat ? u(lang, "news", PATHS[lang].postCat, cat.tr[lang].slug) : listUrl(lang, kind), title = cat?.tr[lang].name || T[KIND_TITLE[kind]];
-  const pages = Math.max(1, Math.ceil(total / 12)), has = (l) => (kind === "post" ? refs.contentNav.hasPosts[l] : (kind === "service" ? refs.contentNav.services : refs.contentNav.policies).some((x) => x.lang === l));
+  const pages = Math.max(1, Math.ceil(total / limit));
   const alts = {};
-  for (const l of ["vi", "en"]) { if (cat) { if (cat.tr[l]) alts[l] = u(l, "news", PATHS[l].postCat, cat.tr[l].slug); } else if (has(l)) alts[l] = listUrl(l, kind); }
+  for (const l of ["vi", "en"]) { if (cat) { if (cat.tr[l]) alts[l] = u(l, "news", PATHS[l].postCat, cat.tr[l].slug); } else if (hasKind(refs, kind, l)) alts[l] = listUrl(l, kind); }
   const crumbs = [{ name: T.home, href: `/${lang}/` }, ...(cat ? [{ name: T.news_title, href: listUrl(lang, kind) }] : []), { name: title, href: base }];
   const topics = kind === "post" ? refs.postCats.filter((c) => c.tr[lang]) : [];
   const pager = pages > 1 ? `<nav class="pager" aria-label="pages">${page > 1 ? `<a class="btn" href="${esc(base + (page > 2 ? "?page=" + (page - 1) : ""))}">${esc(T.prev)}</a>` : ""}<span>${esc(T.page)} ${page}/${pages}</span>${page < pages ? `<a class="btn" href="${esc(base + "?page=" + (page + 1))}">${esc(T.next)}</a>` : ""}</nav>` : "";
-  return renderPage(ctx, { title, path: base, canonical: base + (page > 1 ? `?page=${page}` : ""), alternates: alts, noindex: !items.length, jsonld: [breadcrumbLd(ctx, crumbs)],
+  const bodyPart = list.length ? await listBody(ctx, kind, list) : { html: `<p>${esc(T.empty_content)}</p>`, ld: [] };
+  return renderPage(ctx, { title, path: base, canonical: base + (page > 1 ? `?page=${page}` : ""), alternates: alts, noindex: !list.length, jsonld: [breadcrumbLd(ctx, crumbs), ...bodyPart.ld],
     body: `${breadcrumbs(crumbs)}<h1>${esc(title)}</h1>
 ${topics.length ? `<ul class="topics"><li><a href="${esc(listUrl(lang, kind))}"${cat ? "" : ' aria-current="true"'}>${esc(T.all_topics)}</a></li>${topics.map((c) => `<li><a href="${esc(u(lang, "news", PATHS[lang].postCat, c.tr[lang].slug))}"${cat?.id === c.id ? ' aria-current="true"' : ""}>${esc(c.tr[lang].name)}</a></li>`).join("")}</ul>` : ""}
-${items.length ? `<div class="grid">${items.map((r) => contentCard(ctx, kind, r)).join("")}</div>${pager}` : `<p>${esc(T.empty_content)}</p>`}` });
+${bodyPart.html}${list.length ? pager : ""}` });
 }
+
 export async function contentDetail(ctx, kind, slug) {
   const { env, lang, T, siteUrl } = ctx, d = await getContent(env, lang, kind, slug);
   if (!d) return null;
-  const { t, item, alts } = d, path = contentUrl(lang, kind, slug), when = item.publish_at || item.created_at;
+  const { t, item, alts } = d, m = metaOf(item), path = contentUrl(lang, kind, slug), when = item.publish_at || item.created_at, name = siteName(ctx);
   const body = await sanitize(t.body, { origin: env.SUPABASE_URL }), cover = item.cover_path ? imgUrl(env, item.cover_path) : null;
   const crumbs = [{ name: T.home, href: `/${lang}/` }, ...(kind !== "page" ? [{ name: T[KIND_TITLE[kind]], href: listUrl(lang, kind) }] : []), { name: t.title, href: path }];
-  const ld = kind === "post" ? [jsonLd({ "@context": "https://schema.org", "@type": "Article", headline: t.title, inLanguage: lang, datePublished: when, mainEntityOfPage: siteUrl + path, ...(cover ? { image: [cover] } : {}), ...(item.author_name ? { author: { "@type": "Person", name: item.author_name } } : {}), ...(t.excerpt ? { description: t.excerpt } : {}) })] : [];
+  const ld = [];
+  if (kind === "post") ld.push(jsonLd({ "@context": "https://schema.org", "@type": "Article", headline: t.title, inLanguage: lang, datePublished: when, mainEntityOfPage: siteUrl + path, ...(cover ? { image: [cover] } : {}), ...(item.author_name ? { author: { "@type": "Person", name: item.author_name } } : {}), ...(t.excerpt ? { description: t.excerpt } : {}) }));
+  const closed = kind === "career" && isExpired(m);
+  if (kind === "career" && !closed && m.location) ld.push(jsonLd({ "@context": "https://schema.org", "@type": "JobPosting", title: t.title, description: plain(body) || t.title, datePosted: String(item.created_at).slice(0, 10), ...(m.deadline ? { validThrough: m.deadline + "T23:59:59+07:00" } : {}),
+    ...(ldTypes[m.type] ? { employmentType: ldTypes[m.type] } : {}), hiringOrganization: { "@type": "Organization", name, sameAs: siteUrl + "/" }, jobLocation: { "@type": "Place", address: { "@type": "PostalAddress", addressLocality: m.location, addressCountry: "VN" } }, directApply: false }));
+  let facts = [];
+  if (kind === "project") facts = [[T.client, m.client], [T.year, m.year]];
+  if (kind === "career") facts = [[T.location, m.location], [T.job_type, jobType(T, m)], [T.salary, m.salary], [T.deadline, m.deadline ? fmtDate(m.deadline, lang) : ""]];
+  facts = facts.filter(([, v]) => v);
+  const projUrl = kind === "project" ? httpsUrl(m.url) : null;
+  const applyUrl = kind === "career" && !closed ? (m.apply_email ? `mailto:${m.apply_email}?subject=${encodeURIComponent(T.apply + ": " + t.title)}` : u(lang, "contact")) : null;
   return renderPage(ctx, { title: t.seo_title || t.title, desc: t.seo_description || t.excerpt || undefined, path, ogType: kind === "post" ? "article" : "website", ogImage: cover || undefined,
     alternates: Object.fromEntries(Object.entries(alts).map(([l, sl]) => [l, contentUrl(l, kind, sl)])), jsonld: [...ld, breadcrumbLd(ctx, crumbs)],
     body: `${breadcrumbs(crumbs)}<article class="article"><h1>${esc(t.title)}</h1>${kind === "post" ? `<p class="muted">${esc(T.posted_on)} ${esc(fmtDate(when, lang))}${item.author_name ? ` · ${esc(T.by)} ${esc(item.author_name)}` : ""}</p>` : ""}
+${closed ? `<p class="notice">${esc(T.expired)}</p>` : ""}${facts.length ? `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
 ${cover ? `<img class="cover" src="${esc(cover)}" alt="" fetchpriority="high">` : ""}<div class="rich">${body}</div>
+${projUrl ? `<p><a href="${esc(projUrl)}" rel="noopener noreferrer" target="_blank">${esc(T.visit_site)}</a></p>` : ""}
+${applyUrl ? `<p class="cta"><a class="btn buy" href="${esc(applyUrl)}">${esc(T.apply)}</a>${m.apply_email ? ` <span class="muted">${esc(T.apply_text)} ${esc(m.apply_email)}</span>` : ""}</p>` : ""}
 ${kind === "service" ? `<p class="cta"><a class="btn buy" href="${u(lang, "contact")}">${esc(T.cta_contact)}</a> <a class="btn quote" href="${u(lang, "quote")}">${esc(T.b2b_cta)}</a></p>` : ""}</article>` });
 }
