@@ -116,3 +116,7 @@ fieldset{border:1px solid var(--line);border-radius:var(--radius);margin:12px 0;
 .fc{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:.8rem;text-decoration:none;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .fc-tel{background:#e8590c}.fc-zalo{background:#0068ff}.fc-mess{background:#0084ff}
 @media (max-width:820px){.floatc{bottom:70px}.fc{width:46px;height:46px}}
+
+/* Thanh liên kết nhanh + thanh logo giữ cố định khi cuộn (chỉ màn hình rộng); thanh menu xanh cuộn bình thường */
+.top{display:contents}
+@media (min-width:821px){.stick{position:sticky;top:0;z-index:35;box-shadow:0 2px 8px rgba(0,0,0,.18)}}
